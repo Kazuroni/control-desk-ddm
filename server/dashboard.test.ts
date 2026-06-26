@@ -37,6 +37,30 @@ describe("detectReportType", () => {
   });
 });
 
+describe("safeInt edge cases", () => {
+  it("handles Brazilian thousand separator (dot)", () => {
+    const html = makeHtml(
+      ["DATA", "AGENTE", "LOGIN", "CHAMADAS ATENDIDAS", "ID AGENTE"],
+      [["26/06/2026", "João", "joao", "1.569", "1.438"]]
+    );
+    const result = parseAgentDay(html);
+    // chamadas atendidas with dot separator should parse as 1569
+    expect(result.rows[0].chamadasAtendidas).toBe(1569);
+    // idAgente is varchar, should keep as string
+    expect(result.rows[0].idAgente).toBe("1.438");
+  });
+
+  it("handles zero and empty numeric fields", () => {
+    const html = makeHtml(
+      ["DATA", "AGENTE", "LOGIN", "CHAMADAS ATENDIDAS", "CONTATO EFETIVO"],
+      [["26/06/2026", "Maria", "", "", "0"]]
+    );
+    const result = parseAgentDay(html);
+    expect(result.rows[0].chamadasAtendidas).toBe(0);
+    expect(result.rows[0].contatoEfetivo).toBe(0);
+  });
+});
+
 describe("parseAgentDay", () => {
   it("parses rows correctly", () => {
     const html = makeHtml(

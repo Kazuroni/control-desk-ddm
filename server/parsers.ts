@@ -20,7 +20,9 @@ function normalizeTime(value: string | number | null | undefined): string {
 
 function safeInt(v: string | null | undefined): number {
   if (!v) return 0;
-  const n = parseInt(v.replace(/[^\d]/g, ""), 10);
+  // Remove separadores de milhar (ponto brasileiro) e outros não-dígitos, exceto sinal negativo
+  const cleaned = v.trim().replace(/\./g, "").replace(/,/g, ".").replace(/[^\d-]/g, "");
+  const n = parseInt(cleaned, 10);
   return isNaN(n) ? 0 : n;
 }
 
@@ -94,9 +96,12 @@ export function parseAgentDay(html: string) {
   const iTabulacoesSucessoNegocio = idx("TABULAÇÕES SUCESSO NEGÓCIO");
   const iTempoTabulacao = idx("TEMPO DE TABULAÇÃO");
   const iTempoLogado = idx("TEMPO LOGADO");
-  const iPausasImprodutivas = idx("PAUSAS IMPRODUTIVAS");
+  const iPausasImprodutivas = idx("PAUSA IMPRODUTIVA");
   const iUF = idx("UF");
   const iProduto = idx("PRODUTO");
+  // Campos extras presentes no arquivo real
+  const iUltimoLogoutDH = idx("ÚLTIMO LOGOUT (DATA HORA)");
+  const iPrimeiroLoginDH = idx("PRIMEIRO LOGIN (DATA HORA)");
 
   const result = [];
   for (let i = 1; i < rows.length; i++) {
@@ -104,6 +109,8 @@ export function parseAgentDay(html: string) {
     if (cells.length < 3) continue;
     const agente = iAgente >= 0 ? cells[iAgente] : "";
     if (!agente) continue;
+    // Pula linhas de totais/rodapé geradas pelo sistema de discagem
+    if (/^(TOTAL|TOTAIS|SUBTOTAL|GRAND TOTAL)$/i.test(agente.trim())) continue;
 
     result.push({
       referenceDate: iData >= 0 ? cells[iData] || referenceDate : referenceDate,
@@ -162,6 +169,7 @@ export function parseReasonAgent(html: string) {
     if (cells.length < 3) continue;
     const agente = iAgente >= 0 ? cells[iAgente] : "";
     if (!agente) continue;
+    if (/^(TOTAL|TOTAIS|SUBTOTAL|GRAND TOTAL)$/i.test(agente.trim())) continue;
 
     result.push({
       agente,
@@ -206,6 +214,7 @@ export function parseCampaignAgent(html: string) {
     if (cells.length < 3) continue;
     const agente = iAgente >= 0 ? cells[iAgente] : "";
     if (!agente) continue;
+    if (/^(TOTAL|TOTAIS|SUBTOTAL|GRAND TOTAL)$/i.test(agente.trim())) continue;
 
     result.push({
       agente,
@@ -251,6 +260,7 @@ export function parseDispositionAgent(html: string) {
     if (cells.length < 3) continue;
     const agente = iAgente >= 0 ? cells[iAgente] : "";
     if (!agente) continue;
+    if (/^(TOTAL|TOTAIS|SUBTOTAL|GRAND TOTAL)$/i.test(agente.trim())) continue;
 
     result.push({
       agente,
