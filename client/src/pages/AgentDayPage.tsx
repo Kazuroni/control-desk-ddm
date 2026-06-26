@@ -184,8 +184,8 @@ export default function AgentDayPage() {
                       <span className="text-sm text-violet-400 tabular-nums">{(row.tabulacoesSucessoNegocio ?? 0).toLocaleString("pt-BR")}</span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <span className={`text-sm tabular-nums font-semibold ${(row.pausasImprodutivas ?? 0) > 3 ? "text-red-400" : "text-foreground"}`}>
-                        {(row.pausasImprodutivas ?? 0).toLocaleString("pt-BR")}
+                      <span className={`text-sm tabular-nums font-mono font-semibold ${(row.pausasImprodutivas ?? "00:00:00") !== "00:00:00" ? "text-red-400" : "text-muted-foreground"}`}>
+                        {row.pausasImprodutivas ?? "00:00:00"}
                       </span>
                     </td>
                   </tr>

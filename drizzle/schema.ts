@@ -68,7 +68,7 @@ export const agentDayRecords = mysqlTable("agent_day_records", {
   tabulacoesSucessoNegocio: int("tabulacoesSucessoNegocio").default(0),
   tempoTabulacao: varchar("tempoTabulacao", { length: 32 }),
   tempoLogado: varchar("tempoLogado", { length: 32 }),
-  pausasImprodutivas: int("pausasImprodutivas").default(0),
+  pausasImprodutivas: varchar("pausasImprodutivas", { length: 32 }),
   uf: varchar("uf", { length: 8 }),
   produto: varchar("produto", { length: 128 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

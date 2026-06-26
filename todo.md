@@ -74,3 +74,14 @@
 - [x] Testes unitários para parsers (10 testes)
 - [x] Testes para auth.logout (1 teste)
 - [x] Total: 11 testes passando
+
+## Bugs Reportados (26/06/2026)
+
+- [ ] BUG: Agentes duplicados na faixa "Performance em Tempo Real"
+- [ ] BUG: Cards de resumo executivo não responsivos em diferentes resoluções
+- [ ] BUG: Linha de TOTAL ainda aparece nos dados (números absurdos como 841.802)
+- [ ] BUG: Números quebrados com decimais (ex: "100.35", "2736.77") em campos numéricos
+- [ ] BUG: Filtro de supervisores exibe IDs numéricos em vez de nomes
+- [ ] BUG: Tela "Tabulações Excedidas" não exibe dados após importação
+- [ ] BUG: Pausas improdutivas com valor absurdo (separador de milhar interpretado como decimal)
+- [ ] MELHORIA: Faixa CampaignAgent deve mostrar cada agente com sua célula separadamente

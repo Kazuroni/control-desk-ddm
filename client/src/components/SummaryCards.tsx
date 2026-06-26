@@ -7,33 +7,32 @@ function KpiCard({
   icon: Icon,
   label,
   value,
-  sub,
   colorClass,
   loading,
 }: {
   icon: React.ElementType;
   label: string;
   value: string | number;
-  sub?: string;
   colorClass: string;
   loading?: boolean;
 }) {
   return (
-    <div className="kpi-card flex items-start gap-4">
-      <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${colorClass}`}>
-        <Icon className="w-5 h-5" />
+    <div className="kpi-card flex flex-col gap-2 p-3 min-w-0">
+      <div className="flex items-center gap-2">
+        <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${colorClass}`}>
+          <Icon className="w-3.5 h-3.5" />
+        </div>
+        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider leading-tight truncate">
+          {label}
+        </p>
       </div>
-      <div className="min-w-0">
-        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{label}</p>
-        {loading ? (
-          <Skeleton className="h-7 w-20 mt-1" />
-        ) : (
-          <p className="text-2xl font-bold text-foreground mt-0.5 tabular-nums">
-            {typeof value === "number" ? value.toLocaleString("pt-BR") : value}
-          </p>
-        )}
-        {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
-      </div>
+      {loading ? (
+        <Skeleton className="h-6 w-16" />
+      ) : (
+        <p className="text-xl font-bold text-foreground tabular-nums leading-none">
+          {typeof value === "number" ? value.toLocaleString("pt-BR") : value}
+        </p>
+      )}
     </div>
   );
 }
@@ -71,26 +70,26 @@ export default function SummaryCards() {
     },
     {
       icon: TrendingUp,
-      label: "Tabulações Sucesso",
+      label: "Tab. Sucesso",
       value: data?.totalTabulacoesSucesso ?? 0,
       colorClass: "bg-cyan-500/15 text-cyan-400",
     },
     {
       icon: AlertTriangle,
-      label: "Tabulações Excedidas",
+      label: "Tab. Excedidas",
       value: data?.totalTabulacoesExcedidas ?? 0,
       colorClass: "bg-red-500/15 text-red-400",
     },
     {
       icon: LayoutGrid,
-      label: "Campanhas Ativas",
+      label: "Campanhas",
       value: data?.totalCampanhas ?? 0,
       colorClass: "bg-pink-500/15 text-pink-400",
     },
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
       {cards.map((card) => (
         <KpiCard key={card.label} {...card} loading={isLoading} />
       ))}

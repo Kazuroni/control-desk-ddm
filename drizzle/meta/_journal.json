@@ -15,6 +15,13 @@
       "when": 1782490413971,
       "tag": "0001_smiling_jimmy_woo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1782494923898,
+      "tag": "0002_aromatic_bastion",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,1 @@
+ALTER TABLE `agent_day_records` MODIFY COLUMN `pausasImprodutivas` varchar(32);

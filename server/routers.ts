@@ -207,10 +207,35 @@ export const appRouter = router({
         }
 
         const campanhaChart = Object.values(byCampanha)
-          .map(c => ({ ...c, supervisores: Array.from(c.supervisores).join(", ") }))
+          .map(c => ({ ...c, supervisores: Array.from(c.supervisores).filter(s => s && !/^\d+$/.test(s.trim())).join(", ") }))
           .sort((a, b) => b.totalChamadas - a.totalChamadas);
 
-        return { rows, campanhaChart };
+        // Visão por agente/célula: agrega chamadas e contatos por agente+campanha
+        const byAgenteCampanha: Record<string, {
+          agente: string; campanha: string; nomeSupervisor: string;
+          totalChamadas: number; totalContatos: number;
+          tabulacoesSucesso: number; tabulacoesSucessoNegocio: number;
+        }> = {};
+        for (const row of rows) {
+          const key = `${row.agente}||${row.campanha}`;
+          if (!byAgenteCampanha[key]) {
+            byAgenteCampanha[key] = {
+              agente: row.agente || "",
+              campanha: row.campanha || "",
+              nomeSupervisor: row.nomeSupervisor || "",
+              totalChamadas: 0, totalContatos: 0,
+              tabulacoesSucesso: 0, tabulacoesSucessoNegocio: 0,
+            };
+          }
+          byAgenteCampanha[key].totalChamadas += row.totalChamadas || 0;
+          byAgenteCampanha[key].totalContatos += row.totalContatos || 0;
+          byAgenteCampanha[key].tabulacoesSucesso += row.tabulacoesSucesso || 0;
+          byAgenteCampanha[key].tabulacoesSucessoNegocio += row.tabulacoesSucessoNegocio || 0;
+        }
+        const agenteCampanhaList = Object.values(byAgenteCampanha)
+          .sort((a, b) => b.totalChamadas - a.totalChamadas);
+
+        return { rows, campanhaChart, agenteCampanhaList };
       }),
 
     // ─── Faixa 4: DispositionAgent ─────────────────────────────────────────
@@ -298,10 +323,11 @@ export const appRouter = router({
         const agentes = Array.from(new Set(agentDayRows.map(r => r.agente).filter(Boolean))).sort() as string[];
         const ufs = Array.from(new Set(agentDayRows.map(r => r.uf).filter(Boolean))).sort() as string[];
         const campanhas = Array.from(new Set(campaignRows.map(r => r.campanha).filter(Boolean))).sort() as string[];
+        // Filtra supervisores: remove valores nulos, vazios e IDs numéricos
         const supervisores = Array.from(new Set([
           ...campaignRows.map(r => r.nomeSupervisor),
           ...dispositionRows.map(r => r.nomeSupervisor),
-        ].filter(Boolean))).sort() as string[];
+        ].filter(v => v && v.trim() && !/^\d+$/.test(v.trim())))).sort() as string[];
 
         return { agentes, ufs, campanhas, supervisores };
       }),

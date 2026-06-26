@@ -23,7 +23,8 @@ describe("detectReportType", () => {
   });
 
   it("detects CampaignAgent", () => {
-    const html = makeHtml(["AGENTE", "CAMPANHA", "NOME DO SUPERVISOR"], [["João", "Camp1", "Sup1"]]);
+    // CampaignAgent: contém "LOGINS" e "NOME DO SUPERVISOR" (sem tabulacao excedido)
+    const html = makeHtml(["AGENTE", "CAMPANHA", "LOGINS", "NOME DO SUPERVISOR"], [["João", "Camp1", "1", "Sup1"]]);
     expect(detectReportType(html)).toBe("CampaignAgent");
   });
 
