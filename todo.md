@@ -85,3 +85,10 @@
 - [x] BUG: Tela "Tabulações Excedidas" não exibe dados — corrigido: detectReportType() agora identifica DispositionAgent corretamente
 - [x] BUG: Pausas improdutivas com valor absurdo — corrigido: campo alterado para varchar HH:MM:SS, parser usa normalizeTime()
 - [x] MELHORIA: Faixa CampaignAgent — adicionada aba "Por Agente/Célula" com tabela individual por agente+campanha
+
+## Melhorias Solicitadas (26/06/2026 - v2)
+
+- [x] MELHORIA: Faixa 1 - Exportação PNG com quartil de agentes (Chamadas, CPC, Ocioso, Tab. Sucesso, Sucesso Neg., Pausas Improdutivas)
+- [x] MELHORIA: Faixa 1 - Quartil visual com gráficos + dados tabulares por agente
+- [x] MELHORIA: Faixa 2 - Filtrar "Atendimento Chat" como NÃO improdutiva; manter apenas pausas realmente estouradas (Descanso 1/2/3, Lanche, Banheiro >10min)
+- [x] MELHORIA: Faixa 3 - Visão hierárquica agente → células (expansível), conforme imagem ATTCEL

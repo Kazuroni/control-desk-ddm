@@ -129,16 +129,33 @@ export const appRouter = router({
           agente: input.agente,
         });
 
-        // Agrupa por motivo de pausa para gráficos
-        const byMotivo: Record<string, { motivo: string; totalPausas: number; totalSegundos: number; agentes: Set<string> }> = {};
+        // Regras de classificação de pausas improdutivas:
+        // - "Atendimento Chat" NÃO é improdutiva (é trabalho produtivo)
+        // - Descanso 1, 2, 3 e Lanche SÃO improdutivas (pausas estouradas)
+        // - Banheiro > 10 min É improdutiva
+        // - Demais pausas: mantidas como estão no relatório geral
+        function isImprodutiva(motivo: string, segundos: number): boolean {
+          const m = motivo.toLowerCase().trim();
+          if (m.includes("atendimento chat") || m === "chat") return false;
+          if (m.includes("descanso") || m.includes("lanche")) return true;
+          if (m.includes("banheiro") && segundos > 600) return true; // > 10 min
+          return false;
+        }
+
+        // Agrupa TODAS as pausas por motivo (visão geral)
+        const byMotivo: Record<string, { motivo: string; totalPausas: number; totalSegundos: number; agentes: Set<string>; improdutiva: boolean }> = {};
+        // Agrupa apenas improdutivas por agente (ranking de ofensores)
+        const byAgenteImprod: Record<string, { agente: string; totalSegundos: number; totalPausas: number }> = {};
+        // Agrupa todas pausas por agente (visão completa)
         const byAgente: Record<string, { agente: string; totalSegundos: number; totalPausas: number }> = {};
 
         for (const row of rows) {
           const motivo = row.motivoDePausa || "Sem motivo";
           const segundos = timeToSeconds(row.tempoTotalDePausa);
           const pausas = row.pausasTotalizadoPorCampanha || 0;
+          const improd = isImprodutiva(motivo, segundos);
 
-          if (!byMotivo[motivo]) byMotivo[motivo] = { motivo, totalPausas: 0, totalSegundos: 0, agentes: new Set() };
+          if (!byMotivo[motivo]) byMotivo[motivo] = { motivo, totalPausas: 0, totalSegundos: 0, agentes: new Set(), improdutiva: improd };
           byMotivo[motivo].totalPausas += pausas;
           byMotivo[motivo].totalSegundos += segundos;
           if (row.agente) byMotivo[motivo].agentes.add(row.agente);
@@ -147,17 +164,38 @@ export const appRouter = router({
           if (!byAgente[agente]) byAgente[agente] = { agente, totalSegundos: 0, totalPausas: 0 };
           byAgente[agente].totalSegundos += segundos;
           byAgente[agente].totalPausas += pausas;
+
+          // Ranking de ofensores: apenas pausas improdutivas
+          if (improd) {
+            if (!byAgenteImprod[agente]) byAgenteImprod[agente] = { agente, totalSegundos: 0, totalPausas: 0 };
+            byAgenteImprod[agente].totalSegundos += segundos;
+            byAgenteImprod[agente].totalPausas += pausas;
+          }
         }
 
+        // Visão geral de todos os motivos (exceto Atendimento Chat)
         const motivoChart = Object.values(byMotivo)
+          .filter(m => !m.motivo.toLowerCase().includes("atendimento chat") && !m.motivo.toLowerCase().includes("chat"))
           .map(m => ({ ...m, agentes: m.agentes.size }))
           .sort((a, b) => b.totalSegundos - a.totalSegundos);
 
-        const agenteRanking = Object.values(byAgente)
+        // Apenas motivos improdutivos para gráfico dedicado
+        const motivoImprodChart = Object.values(byMotivo)
+          .filter(m => m.improdutiva)
+          .map(m => ({ ...m, agentes: m.agentes.size }))
+          .sort((a, b) => b.totalSegundos - a.totalSegundos);
+
+        // Ranking de ofensores por pausas improdutivas
+        const agenteRanking = Object.values(byAgenteImprod)
           .sort((a, b) => b.totalSegundos - a.totalSegundos)
           .slice(0, 20);
 
-        return { rows, motivoChart, agenteRanking };
+        // Ranking geral (todas as pausas)
+        const agenteRankingGeral = Object.values(byAgente)
+          .sort((a, b) => b.totalSegundos - a.totalSegundos)
+          .slice(0, 20);
+
+        return { rows, motivoChart, motivoImprodChart, agenteRanking, agenteRankingGeral };
       }),
 
     // ─── Faixa 3: CampaignAgent ────────────────────────────────────────────
