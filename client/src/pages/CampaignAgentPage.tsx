@@ -1,0 +1,249 @@
+import { useRef, useMemo, useState } from "react";
+import { trpc } from "@/lib/trpc";
+import { useDashboard } from "@/contexts/DashboardContext";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+} from "recharts";
+import { Download, Search, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toPng } from "html-to-image";
+import { toast } from "sonner";
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-xl text-xs">
+      <p className="font-semibold text-foreground mb-1 max-w-48 truncate">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.name} style={{ color: p.fill || p.color }}>
+          {p.name}: {Number(p.value).toLocaleString("pt-BR")}
+        </p>
+      ))}
+    </div>
+  );
+};
+
+export default function CampaignAgentPage() {
+  const { filters } = useDashboard();
+  const [search, setSearch] = useState("");
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  const { data, isLoading } = trpc.dashboard.getCampaignAgent.useQuery({
+    sessionIds: filters.sessionIds.length > 0 ? filters.sessionIds : undefined,
+    campanha: filters.campanha || undefined,
+    supervisor: filters.supervisor || undefined,
+  });
+
+  const campanhaChart = data?.campanhaChart ?? [];
+
+  const filtered = useMemo(() => {
+    if (!search) return campanhaChart;
+    return campanhaChart.filter(c =>
+      c.campanha.toLowerCase().includes(search.toLowerCase()) ||
+      c.supervisores.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [campanhaChart, search]);
+
+  const barData = useMemo(() =>
+    filtered.slice(0, 12).map(c => ({
+      name: c.campanha.length > 16 ? c.campanha.slice(0, 16) + "…" : c.campanha,
+      fullName: c.campanha,
+      "Chamadas": c.totalChamadas,
+      "Contatos": c.totalContatos,
+      "Tab. Sucesso": c.tabulacoesSucesso,
+      "Sucesso Neg.": c.tabulacoesSucessoNegocio,
+    })),
+    [filtered]
+  );
+
+  const handleExport = async () => {
+    if (!exportRef.current) return;
+    try {
+      const url = await toPng(exportRef.current, { backgroundColor: "#1a1d2e", pixelRatio: 2 });
+      const a = document.createElement("a"); a.href = url; a.download = "performance-celula-campanha.png"; a.click();
+      toast.success("Imagem exportada com sucesso");
+    } catch { toast.error("Erro ao exportar imagem"); }
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in-up">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-xl font-bold text-foreground">Performance por Célula/Campanha</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Relatório CampaignAgent — {campanhaChart.length} campanhas
+          </p>
+        </div>
+        <Button onClick={handleExport} variant="outline" size="sm" className="gap-2">
+          <Download className="w-4 h-4" /> Exportar PNG
+        </Button>
+      </div>
+
+      {/* Gráfico de barras agrupadas */}
+      <div className="bg-card border border-border rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-foreground mb-4">Comparativo por Campanha</h3>
+        {isLoading ? (
+          <Skeleton className="h-72 w-full" />
+        ) : barData.length === 0 ? (
+          <div className="h-72 flex items-center justify-center text-muted-foreground text-sm">
+            Sem dados disponíveis. Importe um relatório CampaignAgent.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={barData} margin={{ top: 0, right: 10, left: 0, bottom: 60 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.012 240)" vertical={false} />
+              <XAxis
+                dataKey="name"
+                tick={{ fill: "oklch(0.55 0.01 240)", fontSize: 10 }}
+                angle={-35}
+                textAnchor="end"
+                interval={0}
+              />
+              <YAxis tick={{ fill: "oklch(0.55 0.01 240)", fontSize: 10 }} />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend
+                wrapperStyle={{ fontSize: 11, color: "oklch(0.55 0.01 240)", paddingTop: 8 }}
+              />
+              <Bar dataKey="Chamadas" fill="#6366f1" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Contatos" fill="#22c55e" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Tab. Sucesso" fill="#06b6d4" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="Sucesso Neg." fill="#f59e0b" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Filtro e tabela */}
+      <div className="space-y-3">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar campanha ou supervisor..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9 bg-card border-border"
+          />
+        </div>
+
+        <div ref={exportRef} className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full data-table">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Campanha</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Supervisor(es)</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Agentes</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Chamadas</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contatos</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tab. Sucesso</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sucesso Neg.</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Conv. %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i} className="border-b border-border/50">
+                      {Array.from({ length: 8 }).map((_, j) => (
+                        <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                      ))}
+                    </tr>
+                  ))
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground text-sm">
+                      Nenhum dado disponível. Importe um relatório CampaignAgent.
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((c) => {
+                    const conv = c.totalChamadas > 0 ? ((c.totalContatos / c.totalChamadas) * 100).toFixed(1) : "0.0";
+                    const convNum = parseFloat(conv);
+                    return (
+                      <tr key={c.campanha} className="border-b border-border/50 hover:bg-accent/20 transition-colors">
+                        <td className="px-4 py-3">
+                          <span className="text-sm font-medium text-foreground">{c.campanha}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs text-muted-foreground truncate max-w-48 block">{c.supervisores || "—"}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="text-sm text-foreground tabular-nums">{c.agentes.toLocaleString("pt-BR")}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="text-sm font-semibold text-blue-400 tabular-nums">{c.totalChamadas.toLocaleString("pt-BR")}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="text-sm font-semibold text-emerald-400 tabular-nums">{c.totalContatos.toLocaleString("pt-BR")}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="text-sm text-cyan-400 tabular-nums">{c.tabulacoesSucesso.toLocaleString("pt-BR")}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="text-sm text-amber-400 tabular-nums">{c.tabulacoesSucessoNegocio.toLocaleString("pt-BR")}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`text-sm font-semibold tabular-nums ${convNum >= 15 ? "text-emerald-400" : convNum >= 8 ? "text-amber-400" : "text-red-400"}`}>
+                            {conv} %
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Top 5 campanhas */}
+      {filtered.length > 0 && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-card border border-border rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-sm font-semibold text-foreground">Top 5 — Mais Chamadas</h3>
+            </div>
+            <div className="space-y-2">
+              {[...filtered].sort((a, b) => b.totalChamadas - a.totalChamadas).slice(0, 5).map((c, i) => (
+                <div key={c.campanha} className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs text-muted-foreground w-4 tabular-nums shrink-0">{i + 1}.</span>
+                    <span className="text-sm text-foreground truncate">{c.campanha}</span>
+                  </div>
+                  <span className="text-sm font-bold text-blue-400 tabular-nums shrink-0">{c.totalChamadas.toLocaleString("pt-BR")}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp className="w-4 h-4 text-amber-400" />
+              <h3 className="text-sm font-semibold text-foreground">Top 5 — Maior Conversão</h3>
+            </div>
+            <div className="space-y-2">
+              {[...filtered]
+                .filter(c => c.totalChamadas > 0)
+                .map(c => ({ ...c, conv: (c.totalContatos / c.totalChamadas) * 100 }))
+                .sort((a, b) => b.conv - a.conv)
+                .slice(0, 5)
+                .map((c, i) => (
+                  <div key={c.campanha} className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs text-muted-foreground w-4 tabular-nums shrink-0">{i + 1}.</span>
+                      <span className="text-sm text-foreground truncate">{c.campanha}</span>
+                    </div>
+                    <span className="text-sm font-bold text-amber-400 tabular-nums shrink-0">{c.conv.toFixed(1)} %</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

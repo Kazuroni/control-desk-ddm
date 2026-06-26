@@ -1,31 +1,159 @@
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useState } from "react";
+import { useDashboard } from "@/contexts/DashboardContext";
+import SummaryCards from "@/components/SummaryCards";
+import GlobalFilters from "@/components/GlobalFilters";
+import UploadPage from "./UploadPage";
+import AgentDayPage from "./AgentDayPage";
+import ReasonAgentPage from "./ReasonAgentPage";
+import CampaignAgentPage from "./CampaignAgentPage";
+import DispositionAgentPage from "./DispositionAgentPage";
+import {
+  Upload, Activity, PauseCircle, BarChart3, AlertTriangle,
+  ChevronLeft, ChevronRight, BarChart2
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
-import { getLoginUrl } from "@/const";
-import { Streamdown } from 'streamdown';
+import { cn } from "@/lib/utils";
 
-/**
- * All content in this page are only for example, replace with your own feature implementation
- * When building pages, remember your instructions in Frontend Workflow, Frontend Best Practices, Design Guide and Common Pitfalls
- */
+const NAV_ITEMS = [
+  { id: "upload", label: "Importar Dados", icon: Upload, badge: null, color: "text-blue-400" },
+  { id: "agentday", label: "Performance em Tempo Real", icon: Activity, badge: "AgentDay", color: "text-violet-400" },
+  { id: "reasonagent", label: "Controle de Pausas", icon: PauseCircle, badge: "ReasonAgent", color: "text-amber-400" },
+  { id: "campaignagent", label: "Performance por Célula/Campanha", icon: BarChart3, badge: "CampaignAgent", color: "text-emerald-400" },
+  { id: "dispositionagent", label: "Tabulações Excedidas", icon: AlertTriangle, badge: "DispositionAgent", color: "text-red-400" },
+];
+
 export default function Home() {
-  // The userAuth hooks provides authentication state
-  // To implement login/logout functionality, simply call logout() or redirect to getLoginUrl()
-  let { user, loading, error, isAuthenticated, logout } = useAuth();
+  const { activeSection, setActiveSection, filters } = useDashboard();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // If theme is switchable in App.tsx, we can implement theme toggling like this:
-  // const { theme, toggleTheme } = useTheme();
+  const currentNav = NAV_ITEMS.find(n => n.id === activeSection) || NAV_ITEMS[0];
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <main>
-        {/* Example: lucide-react for icons */}
-        <Loader2 className="animate-spin" />
-        Example Page
-        {/* Example: Streamdown for markdown rendering */}
-        <Streamdown>Any **markdown** content</Streamdown>
-        <Button variant="default">Example Button</Button>
-      </main>
+    <div className="flex h-screen bg-background overflow-hidden">
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "flex flex-col border-r border-border bg-sidebar transition-all duration-300 shrink-0",
+          sidebarCollapsed ? "w-16" : "w-64"
+        )}
+      >
+        {/* Logo */}
+        <div className={cn(
+          "flex items-center gap-3 px-4 py-5 border-b border-sidebar-border",
+          sidebarCollapsed && "justify-center px-2"
+        )}>
+          <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center shrink-0">
+            <BarChart2 className="w-4 h-4 text-white" />
+          </div>
+          {!sidebarCollapsed && (
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-sidebar-foreground leading-tight">Call Center</p>
+              <p className="text-xs text-muted-foreground">Dashboard</p>
+            </div>
+          )}
+        </div>
+
+        {/* Sessões selecionadas */}
+        {!sidebarCollapsed && filters.sessionIds.length > 0 && (
+          <div className="mx-3 mt-3 px-3 py-2 bg-primary/10 border border-primary/20 rounded-lg">
+            <p className="text-xs text-primary font-medium">
+              {filters.sessionIds.length} sessão(ões) ativa(s)
+            </p>
+          </div>
+        )}
+
+        {/* Nav */}
+        <nav className="flex-1 py-4 space-y-1 px-2 overflow-y-auto">
+          {NAV_ITEMS.map(item => {
+            const Icon = item.icon;
+            const isActive = activeSection === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveSection(item.id)}
+                title={sidebarCollapsed ? item.label : undefined}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 group",
+                  isActive
+                    ? "bg-sidebar-accent text-sidebar-primary-foreground"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent/60"
+                )}
+              >
+                <Icon className={cn(
+                  "w-4 h-4 shrink-0 transition-colors",
+                  isActive ? item.color : "text-muted-foreground group-hover:text-sidebar-foreground"
+                )} />
+                {!sidebarCollapsed && (
+                  <span className={cn(
+                    "text-sm font-medium leading-tight flex-1 min-w-0",
+                    isActive ? "text-foreground" : "text-sidebar-foreground"
+                  )}>
+                    {item.label}
+                  </span>
+                )}
+                {!sidebarCollapsed && item.badge && (
+                  <span className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded font-mono shrink-0",
+                    isActive ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
+                  )}>
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Collapse toggle */}
+        <div className="p-2 border-t border-sidebar-border">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSidebarCollapsed(c => !c)}
+            className={cn("w-full text-muted-foreground hover:text-foreground", sidebarCollapsed ? "px-0 justify-center" : "justify-end")}
+          >
+            {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          </Button>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top bar */}
+        <header className="flex items-center justify-between gap-4 px-6 py-4 border-b border-border bg-background/80 backdrop-blur shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <currentNav.icon className={cn("w-5 h-5 shrink-0", currentNav.color)} />
+            <div className="min-w-0">
+              <h1 className="text-base font-bold text-foreground leading-tight truncate">{currentNav.label}</h1>
+              {currentNav.badge && (
+                <p className="text-xs text-muted-foreground font-mono">{currentNav.badge}</p>
+              )}
+            </div>
+          </div>
+          {activeSection !== "upload" && (
+            <div className="flex-1 flex justify-end">
+              <GlobalFilters />
+            </div>
+          )}
+        </header>
+
+        {/* Summary cards — visível em todas as faixas exceto upload */}
+        {activeSection !== "upload" && (
+          <div className="px-6 pt-4 shrink-0">
+            <SummaryCards />
+          </div>
+        )}
+
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto px-6 py-4">
+          {activeSection === "upload" && <UploadPage />}
+          {activeSection === "agentday" && <AgentDayPage />}
+          {activeSection === "reasonagent" && <ReasonAgentPage />}
+          {activeSection === "campaignagent" && <CampaignAgentPage />}
+          {activeSection === "dispositionagent" && <DispositionAgentPage />}
+        </main>
+      </div>
     </div>
   );
 }
