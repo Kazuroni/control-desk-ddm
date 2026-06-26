@@ -77,11 +77,11 @@
 
 ## Bugs Reportados (26/06/2026)
 
-- [ ] BUG: Agentes duplicados na faixa "Performance em Tempo Real"
-- [ ] BUG: Cards de resumo executivo não responsivos em diferentes resoluções
-- [ ] BUG: Linha de TOTAL ainda aparece nos dados (números absurdos como 841.802)
-- [ ] BUG: Números quebrados com decimais (ex: "100.35", "2736.77") em campos numéricos
-- [ ] BUG: Filtro de supervisores exibe IDs numéricos em vez de nomes
-- [ ] BUG: Tela "Tabulações Excedidas" não exibe dados após importação
-- [ ] BUG: Pausas improdutivas com valor absurdo (separador de milhar interpretado como decimal)
-- [ ] MELHORIA: Faixa CampaignAgent deve mostrar cada agente com sua célula separadamente
+- [x] BUG: Agentes duplicados na faixa "Performance em Tempo Real" — corrigido: deduplicação por agente+data no parser
+- [x] BUG: Cards de resumo executivo não responsivos — corrigido: layout grid responsivo com breakpoints sm/md/lg
+- [x] BUG: Linha de TOTAL ainda aparece — corrigido: filtro isTotalRow() robusto em todos os parsers
+- [x] BUG: Números quebrados com decimais — corrigido: safeInt() remove separadores de milhar brasileiros antes do parseInt
+- [x] BUG: Filtro de supervisores exibe IDs numéricos — corrigido: regex /^\d+$/ filtra valores puramente numéricos
+- [x] BUG: Tela "Tabulações Excedidas" não exibe dados — corrigido: detectReportType() agora identifica DispositionAgent corretamente
+- [x] BUG: Pausas improdutivas com valor absurdo — corrigido: campo alterado para varchar HH:MM:SS, parser usa normalizeTime()
+- [x] MELHORIA: Faixa CampaignAgent — adicionada aba "Por Agente/Célula" com tabela individual por agente+campanha
