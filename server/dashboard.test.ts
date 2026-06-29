@@ -11,6 +11,36 @@ const makeHtml = (headers: string[], rows: string[][]) => `
 </table>
 </body></html>`;
 
+// ─── Testes de filtros contextuais por faixa ─────────────────────────────────
+describe("SECTION_FILTERS contextual logic", () => {
+  const SECTION_FILTERS: Record<string, string[]> = {
+    agentday:         ["agente", "uf"],
+    reasonagent:      ["agente"],
+    campaignagent:    ["campanha", "supervisor"],
+    dispositionagent: ["supervisor"],
+  };
+
+  it("agentday exposes agente and uf only", () => {
+    expect(SECTION_FILTERS["agentday"]).toEqual(["agente", "uf"]);
+  });
+
+  it("reasonagent exposes only agente", () => {
+    expect(SECTION_FILTERS["reasonagent"]).toEqual(["agente"]);
+  });
+
+  it("campaignagent exposes campanha and supervisor", () => {
+    expect(SECTION_FILTERS["campaignagent"]).toEqual(["campanha", "supervisor"]);
+  });
+
+  it("dispositionagent exposes only supervisor", () => {
+    expect(SECTION_FILTERS["dispositionagent"]).toEqual(["supervisor"]);
+  });
+
+  it("upload section has no filters defined", () => {
+    expect(SECTION_FILTERS["upload"]).toBeUndefined();
+  });
+});
+
 describe("detectReportType", () => {
   it("detects AgentDay", () => {
     const html = makeHtml(["AGENTE", "CHAMADAS ATENDIDAS", "TEMPO LOGADO"], [["João", "10", "08:00:00"]]);

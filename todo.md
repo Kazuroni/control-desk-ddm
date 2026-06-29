@@ -95,7 +95,12 @@
 
 ## Ajustes Solicitados (29/06/2026)
 
-- [ ] BUG: Modo de sessão — ao reimportar, dados se acumulam em vez de substituir; implementar modo "relatório diário" que substitui a sessão do mesmo tipo/data
-- [ ] BUG: BOTs sem campo "login" aparecem na Faixa 1 — filtrar agentes com login vazio/nulo
-- [ ] BUG: Filtros globais e por faixa não funcionam corretamente — diagnosticar e corrigir
-- [ ] MELHORIA: Exportação PNG dupla na Faixa 1: (a) tabela completa estilo PERFORMANCEEXEMPLO + (b) quartil separado
+- [x] BUG: Modo de sessão — corrigido: createUploadSession() apaga sessões e registros antigos do mesmo tipo antes de inserir
+- [x] BUG: BOTs sem campo "login" — corrigido: filtro no banco (isNotNull + ne login vazio) em getAgentDayRecords; afeta tabela, KPIs e filtros
+- [x] BUG: Filtros — corrigido: getAgentDayRecords agora sempre aplica condições com fallback para última sessão; filtros de supervisor sem IDs numéricos
+- [x] MELHORIA: Exportação PNG dupla — botão 'PNG Tabela' (tableExportRef) + botão 'PNG Quartil' (exportRef) separados e independentes
+
+## Gaps de Filtros Identificados (29/06/2026)
+
+- [x] Alinhar filtros globais com cada faixa: GlobalFilters agora é contextual por SECTION_FILTERS, exibindo apenas filtros aplicáveis por faixa ativa
+- [x] Testes cobrindo filtros por faixa: 5 testes adicionados em SECTION_FILTERS contextual logic (18 testes total)

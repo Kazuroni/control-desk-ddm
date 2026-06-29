@@ -4,14 +4,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Filter, X } from "lucide-react";
 
+/**
+ * Filtros contextuais por faixa ativa:
+ * - agentday:         agente, UF
+ * - reasonagent:      agente
+ * - campaignagent:    campanha, supervisor
+ * - dispositionagent: supervisor
+ */
+const SECTION_FILTERS: Record<string, Array<"agente" | "supervisor" | "campanha" | "uf">> = {
+  agentday:         ["agente", "uf"],
+  reasonagent:      ["agente"],
+  campaignagent:    ["campanha", "supervisor"],
+  dispositionagent: ["supervisor"],
+};
+
 export default function GlobalFilters() {
-  const { filters, setFilter, resetFilters } = useDashboard();
+  const { filters, setFilter, resetFilters, activeSection } = useDashboard();
 
   const { data: filterOptions } = trpc.dashboard.getFilters.useQuery({
     sessionIds: filters.sessionIds.length > 0 ? filters.sessionIds : undefined,
   });
 
-  const hasActiveFilters = filters.agente || filters.supervisor || filters.campanha || filters.uf;
+  const visibleFilters = SECTION_FILTERS[activeSection] ?? [];
+  const hasActiveFilters = visibleFilters.some(f => !!filters[f]);
+
+  if (visibleFilters.length === 0) return null;
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -20,53 +37,65 @@ export default function GlobalFilters() {
         <span className="font-medium">Filtros</span>
       </div>
 
-      <Select value={filters.agente || "all"} onValueChange={v => setFilter("agente", v === "all" ? "" : v)}>
-        <SelectTrigger className="h-8 w-44 text-xs bg-card border-border">
-          <SelectValue placeholder="Agente" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todos os agentes</SelectItem>
-          {(filterOptions?.agentes ?? []).map(a => (
-            <SelectItem key={a} value={a}>{a}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* Agente — Faixa 1 e 2 */}
+      {visibleFilters.includes("agente") && (
+        <Select value={filters.agente || "all"} onValueChange={v => setFilter("agente", v === "all" ? "" : v)}>
+          <SelectTrigger className="h-8 w-44 text-xs bg-card border-border">
+            <SelectValue placeholder="Agente" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os agentes</SelectItem>
+            {(filterOptions?.agentes ?? []).map(a => (
+              <SelectItem key={a} value={a}>{a}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
-      <Select value={filters.supervisor || "all"} onValueChange={v => setFilter("supervisor", v === "all" ? "" : v)}>
-        <SelectTrigger className="h-8 w-44 text-xs bg-card border-border">
-          <SelectValue placeholder="Supervisor" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todos os supervisores</SelectItem>
-          {(filterOptions?.supervisores ?? []).map(s => (
-            <SelectItem key={s} value={s}>{s}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* Supervisor — Faixa 3 e 4 */}
+      {visibleFilters.includes("supervisor") && (
+        <Select value={filters.supervisor || "all"} onValueChange={v => setFilter("supervisor", v === "all" ? "" : v)}>
+          <SelectTrigger className="h-8 w-44 text-xs bg-card border-border">
+            <SelectValue placeholder="Supervisor" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os supervisores</SelectItem>
+            {(filterOptions?.supervisores ?? []).map(s => (
+              <SelectItem key={s} value={s}>{s}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
-      <Select value={filters.campanha || "all"} onValueChange={v => setFilter("campanha", v === "all" ? "" : v)}>
-        <SelectTrigger className="h-8 w-44 text-xs bg-card border-border">
-          <SelectValue placeholder="Campanha" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todas as campanhas</SelectItem>
-          {(filterOptions?.campanhas ?? []).map(c => (
-            <SelectItem key={c} value={c}>{c}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* Campanha — Faixa 3 */}
+      {visibleFilters.includes("campanha") && (
+        <Select value={filters.campanha || "all"} onValueChange={v => setFilter("campanha", v === "all" ? "" : v)}>
+          <SelectTrigger className="h-8 w-44 text-xs bg-card border-border">
+            <SelectValue placeholder="Campanha" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as campanhas</SelectItem>
+            {(filterOptions?.campanhas ?? []).map(c => (
+              <SelectItem key={c} value={c}>{c}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
-      <Select value={filters.uf || "all"} onValueChange={v => setFilter("uf", v === "all" ? "" : v)}>
-        <SelectTrigger className="h-8 w-20 text-xs bg-card border-border">
-          <SelectValue placeholder="UF" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todas</SelectItem>
-          {(filterOptions?.ufs ?? []).map(uf => (
-            <SelectItem key={uf} value={uf}>{uf}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* UF — Faixa 1 */}
+      {visibleFilters.includes("uf") && (
+        <Select value={filters.uf || "all"} onValueChange={v => setFilter("uf", v === "all" ? "" : v)}>
+          <SelectTrigger className="h-8 w-20 text-xs bg-card border-border">
+            <SelectValue placeholder="UF" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            {(filterOptions?.ufs ?? []).map(uf => (
+              <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       {hasActiveFilters && (
         <Button
