@@ -156,7 +156,7 @@ export default function CampaignAgentPage() {
     if (!exportRef.current) return;
     try {
       toast.info("Gerando imagem...");
-      const url = await toPng(exportRef.current, { backgroundColor: "#0f1117", pixelRatio: 2 });
+      const url = await toPng(exportRef.current, { backgroundColor: "#0f1117", pixelRatio: 2, skipFonts: true, cacheBust: true });
       const a = document.createElement("a");
       a.href = url;
       a.download = `performance-celula-${new Date().toISOString().slice(0, 10)}.png`;

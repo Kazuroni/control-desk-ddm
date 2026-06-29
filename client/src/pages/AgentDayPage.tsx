@@ -195,6 +195,8 @@ export default function AgentDayPage() {
       const url = await toPng(ref.current, {
         backgroundColor: "#0f1117",
         pixelRatio: 2,
+        skipFonts: true,
+        cacheBust: true,
         style: { borderRadius: "0" }
       });
       const a = document.createElement("a");
