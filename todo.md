@@ -118,3 +118,13 @@
 - [x] Componente ExecutiveReportModal com layout visual dark para exportação PNG
 - [x] Botão "Relatório Executivo" na sidebar e no top bar
 - [x] Exportação PNG consolidado com toPng (skipFonts, cacheBust)
+
+## Melhorias Solicitadas (29/06/2026 - v5)
+
+- [x] Rebranding: logo DDM, nome "DDM Control Desk", tema laranja/azul
+- [x] Relatório Executivo: layout responsivo, métricas corretas
+- [x] Controle de Pausas: aba "Abusadores de Pausa" com limites por tipo, filtro por motivo e busca de agente
+- [x] Controle de Pausas: badge de severidade (Crítico/Alerta/Atenção) baseado em tempo excedido
+- [x] Tabulações Excedidas: aba "Ranking Unificado" com agente+tabulação, filtro dinâmico por tabulação
+- [x] Tabulações Excedidas: filtro por supervisor mantido em todas as abas
+- [x] Tabulações Excedidas: campo tabulacao adicionado ao retorno do backend (agenteTabRanking)

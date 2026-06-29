@@ -44,51 +44,52 @@
 :root {
   --radius: 0.5rem;
 
-  /* Dark theme — Call Center Dashboard */
-  --background: oklch(0.12 0.01 240);
-  --foreground: oklch(0.92 0.01 240);
+  /* Dark theme — DDM Control Desk (laranja + azul + preto profundo) */
+  --background: oklch(0.11 0.01 240);
+  --foreground: oklch(0.93 0.01 240);
 
-  --card: oklch(0.16 0.012 240);
-  --card-foreground: oklch(0.92 0.01 240);
+  --card: oklch(0.15 0.012 240);
+  --card-foreground: oklch(0.93 0.01 240);
 
-  --popover: oklch(0.16 0.012 240);
-  --popover-foreground: oklch(0.92 0.01 240);
+  --popover: oklch(0.15 0.012 240);
+  --popover-foreground: oklch(0.93 0.01 240);
 
-  /* Azul elétrico como cor primária */
-  --primary: oklch(0.65 0.18 250);
-  --primary-foreground: oklch(0.98 0 0);
+  /* Laranja DDM como cor primária */
+  --primary: oklch(0.68 0.20 42);
+  --primary-foreground: oklch(0.99 0 0);
 
+  /* Azul como cor secundária/acento */
   --secondary: oklch(0.22 0.015 240);
   --secondary-foreground: oklch(0.85 0.01 240);
 
-  --muted: oklch(0.20 0.01 240);
+  --muted: oklch(0.19 0.01 240);
   --muted-foreground: oklch(0.55 0.01 240);
 
-  --accent: oklch(0.22 0.015 240);
+  --accent: oklch(0.21 0.015 240);
   --accent-foreground: oklch(0.85 0.01 240);
 
   --destructive: oklch(0.60 0.22 25);
 
-  --border: oklch(0.25 0.012 240);
-  --input: oklch(0.20 0.01 240);
-  --ring: oklch(0.65 0.18 250);
+  --border: oklch(0.24 0.012 240);
+  --input: oklch(0.19 0.01 240);
+  --ring: oklch(0.68 0.20 42);
 
-  /* Chart colors */
-  --chart-1: oklch(0.65 0.18 250);
-  --chart-2: oklch(0.70 0.18 160);
-  --chart-3: oklch(0.75 0.18 55);
+  /* Chart colors: laranja, azul, verde, violeta, vermelho */
+  --chart-1: oklch(0.68 0.20 42);
+  --chart-2: oklch(0.62 0.18 250);
+  --chart-3: oklch(0.70 0.18 160);
   --chart-4: oklch(0.65 0.20 320);
   --chart-5: oklch(0.60 0.22 25);
 
-  /* Sidebar */
-  --sidebar: oklch(0.10 0.012 240);
+  /* Sidebar mais escura */
+  --sidebar: oklch(0.09 0.012 240);
   --sidebar-foreground: oklch(0.85 0.01 240);
-  --sidebar-primary: oklch(0.65 0.18 250);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.18 0.012 240);
+  --sidebar-primary: oklch(0.68 0.20 42);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.17 0.012 240);
   --sidebar-accent-foreground: oklch(0.85 0.01 240);
-  --sidebar-border: oklch(0.20 0.012 240);
-  --sidebar-ring: oklch(0.65 0.18 250);
+  --sidebar-border: oklch(0.19 0.012 240);
+  --sidebar-ring: oklch(0.68 0.20 42);
 }
 
 @layer base {
@@ -135,7 +136,10 @@
 
 /* Gradientes de destaque */
 .gradient-primary {
-  background: linear-gradient(135deg, oklch(0.65 0.18 250), oklch(0.55 0.20 280));
+  background: linear-gradient(135deg, oklch(0.70 0.22 42), oklch(0.58 0.22 30));
+}
+.gradient-blue {
+  background: linear-gradient(135deg, oklch(0.62 0.18 250), oklch(0.52 0.20 270));
 }
 .gradient-success {
   background: linear-gradient(135deg, oklch(0.65 0.18 160), oklch(0.55 0.20 180));

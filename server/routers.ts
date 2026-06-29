@@ -129,76 +129,134 @@ export const appRouter = router({
           agente: input.agente,
         });
 
-        // Regras de classificação de pausas improdutivas (v2):
-        // NÃO são improdutivas (excluir da aba de improdutivas):
-        //   - "Pausa Feedback" / "Feedback"
-        //   - "Erro de Sistema" / "Erro Sistema"
-        //   - "Atendimento Chat" / "Chat"
-        // TODAS as demais pausas SÃO improdutivas por padrão
-        function isImprodutiva(motivo: string, _segundos: number): boolean {
+        // Limites de pausa por tipo (em segundos) — qualquer excesso é improdutivo
+        // Regra: se o tempo da pausa ultrapassar o limite em até 1 min, já é estourado
+        const PAUSE_LIMITS: Record<string, number> = {
+          "descanso 1": 10 * 60,   // 10 min
+          "descanso 2": 10 * 60,
+          "descanso 3": 10 * 60,
+          "lanche": 20 * 60,       // 20 min
+          "banheiro": 10 * 60,     // 10 min
+          "pausa descanso 1": 10 * 60,
+          "pausa descanso 2": 10 * 60,
+          "pausa descanso 3": 10 * 60,
+          "pausa lanche": 20 * 60,
+          "pausa banheiro": 10 * 60,
+        };
+
+        function getLimiteSeg(motivo: string): number | null {
           const m = motivo.toLowerCase().trim();
-          // Exclusões explícitas
+          for (const [key, val] of Object.entries(PAUSE_LIMITS)) {
+            if (m.includes(key)) return val;
+          }
+          return null;
+        }
+
+        // Classificação de pausas improdutivas:
+        // NÃO improdutivas: Feedback, Erro de Sistema, Atendimento Chat
+        // TODAS as demais são improdutivas por padrão
+        function isImprodutiva(motivo: string): boolean {
+          const m = motivo.toLowerCase().trim();
           if (m.includes("feedback")) return false;
           if (m.includes("erro de sistema") || m.includes("erro sistema") || m === "erro") return false;
           if (m.includes("atendimento chat") || m === "chat") return false;
-          // Tudo o mais é improdutivo
           return true;
         }
 
-        // Agrupa TODAS as pausas por motivo (visão geral)
+        // Estrutura de agrupamento por agente + motivo (para dashboard de abusadores)
+        const byAgenteMotivo: Record<string, {
+          agente: string;
+          motivo: string;
+          totalSegundos: number;
+          totalPausas: number;
+          limiteSegundos: number | null;
+          excedeuLimite: boolean;
+          excedidoSegundos: number; // quanto excedeu o limite
+        }> = {};
+
+        // Agrupamentos existentes
         const byMotivo: Record<string, { motivo: string; totalPausas: number; totalSegundos: number; agentes: Set<string>; improdutiva: boolean }> = {};
-        // Agrupa apenas improdutivas por agente (ranking de ofensores)
-        const byAgenteImprod: Record<string, { agente: string; totalSegundos: number; totalPausas: number }> = {};
-        // Agrupa todas pausas por agente (visão completa)
+        const byAgenteImprod: Record<string, { agente: string; totalSegundos: number; totalPausas: number; pausasExcedidas: number }> = {};
         const byAgente: Record<string, { agente: string; totalSegundos: number; totalPausas: number }> = {};
 
         for (const row of rows) {
           const motivo = row.motivoDePausa || "Sem motivo";
           const segundos = timeToSeconds(row.tempoTotalDePausa);
           const pausas = row.pausasTotalizadoPorCampanha || 0;
-          const improd = isImprodutiva(motivo, segundos);
+          const improd = isImprodutiva(motivo);
+          const limite = getLimiteSeg(motivo);
+          const excedeu = limite !== null && segundos > limite + 60; // 1 min de tolerância
+          const excedidoSeg = excedeu && limite !== null ? Math.max(0, segundos - limite) : 0;
 
+          // Por motivo (visão geral)
           if (!byMotivo[motivo]) byMotivo[motivo] = { motivo, totalPausas: 0, totalSegundos: 0, agentes: new Set(), improdutiva: improd };
           byMotivo[motivo].totalPausas += pausas;
           byMotivo[motivo].totalSegundos += segundos;
           if (row.agente) byMotivo[motivo].agentes.add(row.agente);
 
           const agente = row.agente || "Desconhecido";
+
+          // Por agente (geral)
           if (!byAgente[agente]) byAgente[agente] = { agente, totalSegundos: 0, totalPausas: 0 };
           byAgente[agente].totalSegundos += segundos;
           byAgente[agente].totalPausas += pausas;
 
-          // Ranking de ofensores: apenas pausas improdutivas
+          // Por agente (improdutivas)
           if (improd) {
-            if (!byAgenteImprod[agente]) byAgenteImprod[agente] = { agente, totalSegundos: 0, totalPausas: 0 };
+            if (!byAgenteImprod[agente]) byAgenteImprod[agente] = { agente, totalSegundos: 0, totalPausas: 0, pausasExcedidas: 0 };
             byAgenteImprod[agente].totalSegundos += segundos;
             byAgenteImprod[agente].totalPausas += pausas;
+            if (excedeu) byAgenteImprod[agente].pausasExcedidas += 1;
+          }
+
+          // Por agente + motivo (dashboard de abusadores)
+          const key = `${agente}||${motivo}`;
+          if (!byAgenteMotivo[key]) {
+            byAgenteMotivo[key] = {
+              agente, motivo,
+              totalSegundos: 0, totalPausas: 0,
+              limiteSegundos: limite,
+              excedeuLimite: false,
+              excedidoSegundos: 0,
+            };
+          }
+          byAgenteMotivo[key].totalSegundos += segundos;
+          byAgenteMotivo[key].totalPausas += pausas;
+          if (excedeu) {
+            byAgenteMotivo[key].excedeuLimite = true;
+            byAgenteMotivo[key].excedidoSegundos += excedidoSeg;
           }
         }
 
-        // Visão geral: inclui TODOS os motivos (inclusive os não-improdutivos, para transparência)
-        // Marcados com improdutiva: true/false para o frontend poder diferenciar visualmente
         const motivoChart = Object.values(byMotivo)
           .map(m => ({ ...m, agentes: m.agentes.size }))
           .sort((a, b) => b.totalSegundos - a.totalSegundos);
 
-        // Apenas motivos improdutivos para gráfico dedicado
         const motivoImprodChart = Object.values(byMotivo)
           .filter(m => m.improdutiva)
           .map(m => ({ ...m, agentes: m.agentes.size }))
           .sort((a, b) => b.totalSegundos - a.totalSegundos);
 
-        // Ranking de ofensores por pausas improdutivas
         const agenteRanking = Object.values(byAgenteImprod)
           .sort((a, b) => b.totalSegundos - a.totalSegundos)
           .slice(0, 20);
 
-        // Ranking geral (todas as pausas)
         const agenteRankingGeral = Object.values(byAgente)
           .sort((a, b) => b.totalSegundos - a.totalSegundos)
           .slice(0, 20);
 
-        return { rows, motivoChart, motivoImprodChart, agenteRanking, agenteRankingGeral };
+        // Dashboard de abusadores: agentes que excederam limite em algum motivo
+        const abusadoresPausa = Object.values(byAgenteMotivo)
+          .filter(r => r.excedeuLimite)
+          .sort((a, b) => b.excedidoSegundos - a.excedidoSegundos)
+          .slice(0, 30);
+
+        // Limites de pausa para exibir no frontend
+        const pausaLimites = Object.entries(PAUSE_LIMITS).map(([motivo, seg]) => ({
+          motivo, limiteMin: Math.round(seg / 60)
+        }));
+
+        return { rows, motivoChart, motivoImprodChart, agenteRanking, agenteRankingGeral, abusadoresPausa, pausaLimites };
       }),
 
     // ─── Faixa 3: CampaignAgent ────────────────────────────────────────────
@@ -302,11 +360,17 @@ export const appRouter = router({
           supervisor: string;
           ocorrencias: number; totalSegundos: number; totalChamadas: number; agentesSet: Set<string>;
         }> = {};
+        // Por agente+tabulação para ranking unificado (excedidas + tempo segurado)
+        const byAgenteTab: Record<string, {
+          agente: string; supervisor: string; tabulacao: string;
+          ocorrencias: number; totalSegundos: number; totalChamadas: number;
+        }> = {};
 
         for (const row of rows) {
           const agente = row.agente || "Desconhecido";
           const supervisor = row.nomeSupervisor || "Sem supervisor";
           const segundos = timeToSeconds(row.tempoTabulacao);
+          const tabulacao = row.tabulacao || "Sem tabulação";
 
           if (!byAgente[agente]) byAgente[agente] = { agente, supervisor, ocorrencias: 0, totalSegundos: 0, totalChamadas: 0 };
           byAgente[agente].ocorrencias += 1;
@@ -318,6 +382,13 @@ export const appRouter = router({
           bySupervisor[supervisor].totalSegundos += segundos;
           bySupervisor[supervisor].totalChamadas += row.totalChamadas || 0;
           bySupervisor[supervisor].agentesSet.add(agente);
+
+          // Por agente + tabulação
+          const keyAT = `${agente}||${tabulacao}`;
+          if (!byAgenteTab[keyAT]) byAgenteTab[keyAT] = { agente, supervisor, tabulacao, ocorrencias: 0, totalSegundos: 0, totalChamadas: 0 };
+          byAgenteTab[keyAT].ocorrencias += 1;
+          byAgenteTab[keyAT].totalSegundos += segundos;
+          byAgenteTab[keyAT].totalChamadas += row.totalChamadas || 0;
         }
 
         const secToHMS = (s: number) => {
@@ -340,7 +411,14 @@ export const appRouter = router({
           .sort((a, b) => b.ocorrencias - a.ocorrencias)
           .slice(0, 10);
 
-        return { rows, agenteRanking: agenteRanking.slice(0, 20), supervisorRanking };
+        // Ranking unificado por agente+tabulação (excedidas + tempo segurado)
+        let agenteTabRanking = Object.values(byAgenteTab)
+          .map(a => ({ ...a, tempoFormatado: secToHMS(a.totalSegundos) }))
+          .sort((a, b) => b.ocorrencias - a.ocorrencias);
+        if (input.minTempoSeg) agenteTabRanking = agenteTabRanking.filter(a => a.totalSegundos >= (input.minTempoSeg ?? 0));
+        if (input.minChamadas) agenteTabRanking = agenteTabRanking.filter(a => a.totalChamadas >= (input.minChamadas ?? 0));
+
+        return { rows, agenteRanking: agenteRanking.slice(0, 20), supervisorRanking, agenteTabRanking: agenteTabRanking.slice(0, 50) };
       }),
 
     // ─── Cards de Resumo Executivo ─────────────────────────────────────────

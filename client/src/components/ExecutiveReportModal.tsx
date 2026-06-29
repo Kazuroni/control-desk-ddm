@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Download, TrendingUp, TrendingDown, PauseCircle,
-  BarChart3, AlertTriangle, Trophy, X
+  BarChart3, AlertTriangle, Trophy
 } from "lucide-react";
 
 interface ReportItem {
@@ -21,105 +21,93 @@ interface RankingCardProps {
   title: string;
   subtitle: string;
   items: ReportItem[];
-  variant: "success" | "danger" | "warning" | "info" | "purple";
+  variant: "orange" | "red" | "amber" | "blue" | "violet";
   icon: React.ReactNode;
-  unit?: string;
   formatValue?: (v: number) => string;
 }
 
-const VARIANT_STYLES = {
-  success: {
-    border: "border-emerald-500/30",
-    header: "bg-emerald-500/10",
-    icon: "text-emerald-400",
-    badge: "bg-emerald-500/20 text-emerald-300",
-    bar: "bg-emerald-500",
-    rank1: "text-emerald-300",
+const V = {
+  orange: {
+    border: "border-orange-500/30",
+    header: "bg-orange-500/10",
+    icon: "text-orange-400",
+    badge: "bg-orange-500/15 text-orange-300",
+    bar: "bg-orange-500",
+    num1: "text-orange-300",
   },
-  danger: {
+  red: {
     border: "border-red-500/30",
     header: "bg-red-500/10",
     icon: "text-red-400",
-    badge: "bg-red-500/20 text-red-300",
+    badge: "bg-red-500/15 text-red-300",
     bar: "bg-red-500",
-    rank1: "text-red-300",
+    num1: "text-red-300",
   },
-  warning: {
+  amber: {
     border: "border-amber-500/30",
     header: "bg-amber-500/10",
     icon: "text-amber-400",
-    badge: "bg-amber-500/20 text-amber-300",
+    badge: "bg-amber-500/15 text-amber-300",
     bar: "bg-amber-500",
-    rank1: "text-amber-300",
+    num1: "text-amber-300",
   },
-  info: {
+  blue: {
     border: "border-blue-500/30",
     header: "bg-blue-500/10",
     icon: "text-blue-400",
-    badge: "bg-blue-500/20 text-blue-300",
+    badge: "bg-blue-500/15 text-blue-300",
     bar: "bg-blue-500",
-    rank1: "text-blue-300",
+    num1: "text-blue-300",
   },
-  purple: {
+  violet: {
     border: "border-violet-500/30",
     header: "bg-violet-500/10",
     icon: "text-violet-400",
-    badge: "bg-violet-500/20 text-violet-300",
+    badge: "bg-violet-500/15 text-violet-300",
     bar: "bg-violet-500",
-    rank1: "text-violet-300",
+    num1: "text-violet-300",
   },
 };
 
-function RankingCard({ title, subtitle, items, variant, icon, unit = "", formatValue }: RankingCardProps) {
-  const s = VARIANT_STYLES[variant];
+function RankingCard({ title, subtitle, items, variant, icon, formatValue }: RankingCardProps) {
+  const s = V[variant];
   const maxVal = Math.max(...items.map(i => i.valor), 1);
 
   return (
-    <div className={`rounded-xl border ${s.border} overflow-hidden`}>
-      {/* Header */}
-      <div className={`${s.header} px-4 py-3 flex items-center gap-2.5`}>
+    <div className={`rounded-xl border ${s.border} overflow-hidden flex flex-col`}>
+      <div className={`${s.header} px-4 py-3 flex items-center gap-2.5 shrink-0`}>
         <span className={s.icon}>{icon}</span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-white leading-tight">{title}</p>
-          <p className="text-[11px] text-white/50 leading-tight mt-0.5">{subtitle}</p>
+          <p className="text-[11px] text-white/45 leading-tight mt-0.5">{subtitle}</p>
         </div>
       </div>
-
-      {/* Rows */}
-      <div className="px-4 py-3 space-y-2.5 bg-[#0f1117]">
+      <div className="px-4 py-3 space-y-2.5 bg-[#0f1117] flex-1">
         {items.length === 0 ? (
-          <p className="text-xs text-white/30 text-center py-2">Sem dados</p>
-        ) : (
-          items.map((item, idx) => {
-            const pct = Math.round((item.valor / maxVal) * 100);
-            const displayVal = formatValue ? formatValue(item.valor) : `${item.valor.toLocaleString("pt-BR")}${unit ? ` ${unit}` : ""}`;
-            return (
-              <div key={idx} className="space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <span className={`text-[11px] font-bold w-5 text-right shrink-0 ${idx === 0 ? s.rank1 : "text-white/40"}`}>
-                      {idx + 1}
-                    </span>
-                    <span className="text-xs text-white/80 truncate font-medium">{item.agente}</span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${s.badge}`}>
-                      {item.detalhe}
-                    </span>
-                    <span className="text-xs font-bold text-white w-16 text-right">{displayVal}</span>
-                  </div>
-                </div>
-                {/* Progress bar */}
-                <div className="h-1 bg-white/5 rounded-full overflow-hidden ml-7">
-                  <div
-                    className={`h-full ${s.bar} rounded-full transition-all`}
-                    style={{ width: `${pct}%` }}
-                  />
+          <p className="text-xs text-white/25 text-center py-3">Sem dados disponíveis</p>
+        ) : items.map((item, idx) => {
+          const pct = Math.round((item.valor / maxVal) * 100);
+          const display = formatValue ? formatValue(item.valor) : item.valor.toLocaleString("pt-BR");
+          return (
+            <div key={idx} className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className={`text-[11px] font-bold w-4 text-right shrink-0 ${idx === 0 ? s.num1 : "text-white/35"}`}>
+                  {idx + 1}
+                </span>
+                <span className="text-[11px] text-white/75 truncate font-medium flex-1 min-w-0">{item.agente}</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${s.badge}`}>
+                    {item.detalhe}
+                  </span>
+                  <span className="text-xs font-bold text-white tabular-nums">{display}</span>
                 </div>
               </div>
-            );
-          })
-        )}
+              <div className="h-[3px] bg-white/5 rounded-full overflow-hidden ml-6">
+                <div className={`h-full ${s.bar} rounded-full`} style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -135,7 +123,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
   const exportRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
 
-  const { data, isLoading } = trpc.dashboard.getExecutiveReport.useQuery(
+  const { data, isLoading, isError } = trpc.dashboard.getExecutiveReport.useQuery(
     { sessionIds: filters.sessionIds.length > 0 ? filters.sessionIds : undefined },
     { enabled: open }
   );
@@ -156,143 +144,137 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
       a.href = url;
       a.download = `relatorio-executivo-${new Date().toISOString().slice(0, 10)}.png`;
       a.click();
-      toast.success("Relatório exportado com sucesso!");
+      toast.success("Relatório exportado!");
     } catch {
-      toast.error("Erro ao exportar relatório");
+      toast.error("Erro ao exportar. Tente novamente.");
     } finally {
       setExporting(false);
     }
   };
 
   const today = new Date().toLocaleDateString("pt-BR", {
-    day: "2-digit", month: "long", year: "numeric",
+    weekday: "long", day: "2-digit", month: "long", year: "numeric",
   });
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-5xl w-full max-h-[90vh] overflow-y-auto p-0 gap-0 bg-[#0f1117] border-border">
-        {/* Dialog header (outside export area) */}
-        <DialogHeader className="flex flex-row items-center justify-between px-6 py-4 border-b border-border shrink-0">
-          <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
-            <Trophy className="w-4 h-4 text-amber-400" />
+      <DialogContent className="w-[95vw] max-w-5xl max-h-[92vh] overflow-y-auto p-0 gap-0 bg-[#0f1117] border-border">
+        {/* Toolbar */}
+        <DialogHeader className="flex flex-row items-center justify-between px-5 py-3.5 border-b border-border shrink-0 bg-[#0f1117]">
+          <DialogTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-primary" />
             Relatório Executivo Consolidado
           </DialogTitle>
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={handleExport}
-              disabled={isLoading || exporting}
-              size="sm"
-              className="gap-2 bg-primary hover:bg-primary/90"
-            >
-              <Download className="w-3.5 h-3.5" />
-              {exporting ? "Gerando..." : "Exportar PNG"}
-            </Button>
-          </div>
+          <Button
+            onClick={handleExport}
+            disabled={isLoading || exporting || isError}
+            size="sm"
+            className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs"
+          >
+            <Download className="w-3.5 h-3.5" />
+            {exporting ? "Gerando..." : "Exportar PNG"}
+          </Button>
         </DialogHeader>
 
-        {/* Exportable area */}
-        <div ref={exportRef} className="bg-[#0f1117] p-6">
-          {/* Report header */}
-          <div className="flex items-start justify-between mb-6 pb-5 border-b border-white/10">
-            <div>
-              <div className="flex items-center gap-2.5 mb-1">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center">
-                  <BarChart3 className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-lg font-bold text-white leading-tight">Relatório Executivo</h1>
-                  <p className="text-xs text-white/40 leading-tight">Call Center · Dashboard Analítico</p>
-                </div>
+        {/* Exportable content */}
+        <div ref={exportRef} className="bg-[#0f1117] p-5">
+          {/* Header do relatório */}
+          <div className="flex items-center justify-between mb-5 pb-4 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <img
+                src="/manus-storage/ddm-logo_7a072db6.png"
+                alt="DDM"
+                className="w-10 h-10 rounded-lg object-cover"
+              />
+              <div>
+                <h1 className="text-base font-bold text-white leading-tight">DDM Control Desk</h1>
+                <p className="text-xs text-white/40">Relatório Executivo · Call Center Analytics</p>
               </div>
             </div>
             <div className="text-right">
-              <p className="text-xs text-white/30 uppercase tracking-wider font-medium">Data de referência</p>
-              <p className="text-sm font-semibold text-white/70 mt-0.5">{today}</p>
+              <p className="text-[10px] text-white/30 uppercase tracking-wider">Referência</p>
+              <p className="text-xs font-semibold text-white/60 mt-0.5 capitalize">{today}</p>
             </div>
           </div>
 
           {isLoading ? (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-48 rounded-xl bg-white/5" />
+                <Skeleton key={i} className="h-44 rounded-xl bg-white/5" />
               ))}
+            </div>
+          ) : isError ? (
+            <div className="flex items-center justify-center py-16 text-white/30 text-sm">
+              Erro ao carregar dados. Verifique se os relatórios foram importados.
             </div>
           ) : (
             <>
-              {/* Section label */}
-              <div className="mb-4">
-                <p className="text-[11px] font-semibold text-white/30 uppercase tracking-widest">
-                  Faixa 1 — Performance em Tempo Real
+              {/* Seção 1: Performance (2 colunas) */}
+              <div className="mb-3">
+                <p className="text-[10px] font-semibold text-white/25 uppercase tracking-widest mb-3">
+                  ① Performance em Tempo Real — Chamadas Atendidas
                 </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <RankingCard
+                    title="🏆 Top 5 Melhores Agentes"
+                    subtitle="Maior volume de chamadas atendidas no período"
+                    items={data?.top5Chamadas ?? []}
+                    variant="orange"
+                    icon={<TrendingUp className="w-4 h-4" />}
+                    formatValue={v => `${v.toLocaleString("pt-BR")} ch.`}
+                  />
+                  <RankingCard
+                    title="⚠️ Top 5 Menor Produção"
+                    subtitle="Menor volume — requer atenção do supervisor"
+                    items={data?.bottom5Chamadas ?? []}
+                    variant="red"
+                    icon={<TrendingDown className="w-4 h-4" />}
+                    formatValue={v => `${v.toLocaleString("pt-BR")} ch.`}
+                  />
+                </div>
               </div>
 
-              {/* Row 1: Faixa 1 */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <RankingCard
-                  title="Top 5 Melhores Agentes"
-                  subtitle="Maior volume de chamadas atendidas"
-                  items={data?.top5Chamadas ?? []}
-                  variant="success"
-                  icon={<TrendingUp className="w-4 h-4" />}
-                  unit="chamadas"
-                />
-                <RankingCard
-                  title="Top 5 Agentes com Menor Volume"
-                  subtitle="Menor volume de chamadas atendidas"
-                  items={data?.bottom5Chamadas ?? []}
-                  variant="danger"
-                  icon={<TrendingDown className="w-4 h-4" />}
-                  unit="chamadas"
-                />
-              </div>
-
-              {/* Section label */}
-              <div className="mb-4">
-                <p className="text-[11px] font-semibold text-white/30 uppercase tracking-widest">
-                  Faixas 2, 3 e 4 — Pausas · Campanhas · Tabulações
+              {/* Seção 2: Pausas + Campanhas + Tabulações (3 colunas responsivas) */}
+              <div>
+                <p className="text-[10px] font-semibold text-white/25 uppercase tracking-widest mb-3">
+                  ② Pausas Improdutivas · ③ Campanhas · ④ Tabulações Excedidas
                 </p>
-              </div>
-
-              {/* Row 2: Faixas 2, 3, 4 */}
-              <div className="grid grid-cols-3 gap-4">
-                <RankingCard
-                  title="Top 5 Pausas Improdutivas"
-                  subtitle="Maior tempo em pausas improdutivas"
-                  items={data?.top5Pausas ?? []}
-                  variant="warning"
-                  icon={<PauseCircle className="w-4 h-4" />}
-                  formatValue={(v) => {
-                    const h = Math.floor(v / 3600);
-                    const m = Math.floor((v % 3600) / 60);
-                    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-                  }}
-                />
-                <RankingCard
-                  title="Top 5 Campanhas"
-                  subtitle="Maior volume de chamadas realizadas"
-                  items={data?.top5Campanhas ?? []}
-                  variant="info"
-                  icon={<BarChart3 className="w-4 h-4" />}
-                  unit="chamadas"
-                />
-                <RankingCard
-                  title="Top 5 Tabulações Excedidas"
-                  subtitle="Maior número de ocorrências"
-                  items={data?.top5Tabulacoes ?? []}
-                  variant="purple"
-                  icon={<AlertTriangle className="w-4 h-4" />}
-                  unit="ocorrências"
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <RankingCard
+                    title="⏸ Top 5 Pausas Improdutivas"
+                    subtitle="Maior tempo acumulado em pausas não produtivas"
+                    items={data?.top5Pausas ?? []}
+                    variant="amber"
+                    icon={<PauseCircle className="w-4 h-4" />}
+                    formatValue={v => {
+                      const h = Math.floor(v / 3600);
+                      const m = Math.floor((v % 3600) / 60);
+                      return h > 0 ? `${h}h ${m}min` : `${m} min`;
+                    }}
+                  />
+                  <RankingCard
+                    title="📊 Top 5 Campanhas"
+                    subtitle="Maior volume de chamadas realizadas"
+                    items={data?.top5Campanhas ?? []}
+                    variant="blue"
+                    icon={<BarChart3 className="w-4 h-4" />}
+                    formatValue={v => `${v.toLocaleString("pt-BR")} ch.`}
+                  />
+                  <RankingCard
+                    title="🚨 Top 5 Tabulações Excedidas"
+                    subtitle="Maior número de ocorrências de tempo excedido"
+                    items={data?.top5Tabulacoes ?? []}
+                    variant="violet"
+                    icon={<AlertTriangle className="w-4 h-4" />}
+                    formatValue={v => `${v} ocorr.`}
+                  />
+                </div>
               </div>
 
               {/* Footer */}
-              <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
-                <p className="text-[10px] text-white/20">
-                  Gerado automaticamente pelo Dashboard de Call Center
-                </p>
-                <p className="text-[10px] text-white/20 font-mono">
-                  {new Date().toLocaleString("pt-BR")}
-                </p>
+              <div className="mt-5 pt-4 border-t border-white/8 flex items-center justify-between">
+                <p className="text-[10px] text-white/20">DDM Control Desk · Dashboard Analítico de Call Center</p>
+                <p className="text-[10px] text-white/20 font-mono">{new Date().toLocaleString("pt-BR")}</p>
               </div>
             </>
           )}

@@ -10,21 +10,21 @@ import CampaignAgentPage from "./CampaignAgentPage";
 import DispositionAgentPage from "./DispositionAgentPage";
 import {
   Upload, Activity, PauseCircle, BarChart3, AlertTriangle,
-  ChevronLeft, ChevronRight, BarChart2, Trophy
+  ChevronLeft, ChevronRight, Trophy
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { id: "upload", label: "Importar Dados", icon: Upload, badge: null, color: "text-blue-400" },
-  { id: "agentday", label: "Performance em Tempo Real", icon: Activity, badge: "AgentDay", color: "text-violet-400" },
-  { id: "reasonagent", label: "Controle de Pausas", icon: PauseCircle, badge: "ReasonAgent", color: "text-amber-400" },
+  { id: "upload", label: "Importar Dados", icon: Upload, badge: null, color: "text-orange-400" },
+  { id: "agentday", label: "Performance em Tempo Real", icon: Activity, badge: "AgentDay", color: "text-orange-400" },
+  { id: "reasonagent", label: "Controle de Pausas", icon: PauseCircle, badge: "ReasonAgent", color: "text-blue-400" },
   { id: "campaignagent", label: "Performance por Célula/Campanha", icon: BarChart3, badge: "CampaignAgent", color: "text-emerald-400" },
   { id: "dispositionagent", label: "Tabulações Excedidas", icon: AlertTriangle, badge: "DispositionAgent", color: "text-red-400" },
 ];
 
 export default function Home() {
-  const { activeSection, setActiveSection, filters } = useDashboard();
+  const { activeSection, setActiveSection } = useDashboard();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [executiveOpen, setExecutiveOpen] = useState(false);
 
@@ -39,18 +39,20 @@ export default function Home() {
           sidebarCollapsed ? "w-16" : "w-64"
         )}
       >
-        {/* Logo */}
+        {/* Logo DDM */}
         <div className={cn(
-          "flex items-center gap-3 px-4 py-5 border-b border-sidebar-border",
+          "flex items-center gap-3 px-4 py-4 border-b border-sidebar-border",
           sidebarCollapsed && "justify-center px-2"
         )}>
-          <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center shrink-0">
-            <BarChart2 className="w-4 h-4 text-white" />
-          </div>
+          <img
+            src="/manus-storage/ddm-logo_7a072db6.png"
+            alt="DDM"
+            className="w-9 h-9 rounded-lg object-cover shrink-0"
+          />
           {!sidebarCollapsed && (
             <div className="min-w-0">
-              <p className="text-sm font-bold text-sidebar-foreground leading-tight">Call Center</p>
-              <p className="text-xs text-muted-foreground">Dashboard</p>
+              <p className="text-sm font-bold text-sidebar-foreground leading-tight">DDM Control Desk</p>
+              <p className="text-[11px] text-muted-foreground">Call Center Analytics</p>
             </div>
           )}
         </div>
@@ -68,8 +70,8 @@ export default function Home() {
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 group",
                   isActive
-                    ? "bg-sidebar-accent text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent/60"
+                    ? "bg-primary/15 border border-primary/30 text-sidebar-primary-foreground"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent/60 border border-transparent"
                 )}
               >
                 <Icon className={cn(
@@ -104,13 +106,13 @@ export default function Home() {
             title={sidebarCollapsed ? "Relatório Executivo" : undefined}
             className={cn(
               "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 group",
-              "bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/40",
+              "bg-primary/10 hover:bg-primary/20 border border-primary/25 hover:border-primary/50",
               sidebarCollapsed && "justify-center px-0"
             )}
           >
-            <Trophy className="w-4 h-4 shrink-0 text-amber-400" />
+            <Trophy className="w-4 h-4 shrink-0 text-primary" />
             {!sidebarCollapsed && (
-              <span className="text-sm font-semibold text-amber-300 leading-tight">
+              <span className="text-sm font-semibold text-primary leading-tight">
                 Relatório Executivo
               </span>
             )}
@@ -133,7 +135,7 @@ export default function Home() {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex items-center justify-between gap-4 px-6 py-4 border-b border-border bg-background/80 backdrop-blur shrink-0">
+        <header className="flex items-center justify-between gap-4 px-6 py-3.5 border-b border-border bg-background/80 backdrop-blur shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <currentNav.icon className={cn("w-5 h-5 shrink-0", currentNav.color)} />
             <div className="min-w-0">
@@ -143,28 +145,23 @@ export default function Home() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            {/* Botão Relatório Executivo no top bar */}
+          <div className="flex items-center gap-2">
             {activeSection !== "upload" && (
               <Button
                 onClick={() => setExecutiveOpen(true)}
                 variant="outline"
                 size="sm"
-                className="gap-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 hover:border-amber-500/50"
+                className="gap-1.5 border-primary/30 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary/50 text-xs"
               >
                 <Trophy className="w-3.5 h-3.5" />
                 Relatório Executivo
               </Button>
             )}
-            {activeSection !== "upload" && (
-              <div className="flex-1 flex justify-end">
-                <GlobalFilters />
-              </div>
-            )}
+            {activeSection !== "upload" && <GlobalFilters />}
           </div>
         </header>
 
-        {/* Summary cards — visível em todas as faixas exceto upload */}
+        {/* Summary cards */}
         {activeSection !== "upload" && (
           <div className="px-6 pt-4 shrink-0">
             <SummaryCards />
