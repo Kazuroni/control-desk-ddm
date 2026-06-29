@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useDashboard } from "@/contexts/DashboardContext";
 import SummaryCards from "@/components/SummaryCards";
 import GlobalFilters from "@/components/GlobalFilters";
+import ExecutiveReportModal from "@/components/ExecutiveReportModal";
 import UploadPage from "./UploadPage";
 import AgentDayPage from "./AgentDayPage";
 import ReasonAgentPage from "./ReasonAgentPage";
@@ -9,9 +10,8 @@ import CampaignAgentPage from "./CampaignAgentPage";
 import DispositionAgentPage from "./DispositionAgentPage";
 import {
   Upload, Activity, PauseCircle, BarChart3, AlertTriangle,
-  ChevronLeft, ChevronRight, BarChart2
+  ChevronLeft, ChevronRight, BarChart2, Trophy
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +26,7 @@ const NAV_ITEMS = [
 export default function Home() {
   const { activeSection, setActiveSection, filters } = useDashboard();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [executiveOpen, setExecutiveOpen] = useState(false);
 
   const currentNav = NAV_ITEMS.find(n => n.id === activeSection) || NAV_ITEMS[0];
 
@@ -53,8 +54,6 @@ export default function Home() {
             </div>
           )}
         </div>
-
-        {/* Modo diário: sem seleção manual de sessões */}
 
         {/* Nav */}
         <nav className="flex-1 py-4 space-y-1 px-2 overflow-y-auto">
@@ -98,6 +97,26 @@ export default function Home() {
           })}
         </nav>
 
+        {/* Botão Relatório Executivo */}
+        <div className={cn("px-2 pb-2", sidebarCollapsed && "px-1")}>
+          <button
+            onClick={() => setExecutiveOpen(true)}
+            title={sidebarCollapsed ? "Relatório Executivo" : undefined}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 group",
+              "bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/40",
+              sidebarCollapsed && "justify-center px-0"
+            )}
+          >
+            <Trophy className="w-4 h-4 shrink-0 text-amber-400" />
+            {!sidebarCollapsed && (
+              <span className="text-sm font-semibold text-amber-300 leading-tight">
+                Relatório Executivo
+              </span>
+            )}
+          </button>
+        </div>
+
         {/* Collapse toggle */}
         <div className="p-2 border-t border-sidebar-border">
           <Button
@@ -124,11 +143,25 @@ export default function Home() {
               )}
             </div>
           </div>
-          {activeSection !== "upload" && (
-            <div className="flex-1 flex justify-end">
-              <GlobalFilters />
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {/* Botão Relatório Executivo no top bar */}
+            {activeSection !== "upload" && (
+              <Button
+                onClick={() => setExecutiveOpen(true)}
+                variant="outline"
+                size="sm"
+                className="gap-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 hover:border-amber-500/50"
+              >
+                <Trophy className="w-3.5 h-3.5" />
+                Relatório Executivo
+              </Button>
+            )}
+            {activeSection !== "upload" && (
+              <div className="flex-1 flex justify-end">
+                <GlobalFilters />
+              </div>
+            )}
+          </div>
         </header>
 
         {/* Summary cards — visível em todas as faixas exceto upload */}
@@ -147,6 +180,12 @@ export default function Home() {
           {activeSection === "dispositionagent" && <DispositionAgentPage />}
         </main>
       </div>
+
+      {/* Modal do Relatório Executivo */}
+      <ExecutiveReportModal
+        open={executiveOpen}
+        onClose={() => setExecutiveOpen(false)}
+      />
     </div>
   );
 }

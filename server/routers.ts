@@ -373,6 +373,111 @@ export const appRouter = router({
         };
       }),
 
+    // ─── Relatório Executivo Consolidado ─────────────────────────────────────
+    getExecutiveReport: publicProcedure
+      .input(z.object({ sessionIds: z.array(z.number()).optional() }))
+      .query(async ({ input }) => {
+        const [agentDayRows, reasonRows, campaignRows, dispositionRows] = await Promise.all([
+          getAgentDayRecords({ sessionIds: input.sessionIds }),
+          getReasonAgentRecords({ sessionIds: input.sessionIds }),
+          getCampaignAgentRecords({ sessionIds: input.sessionIds }),
+          getDispositionAgentRecords({ sessionIds: input.sessionIds }),
+        ]);
+
+        // ── Faixa 1: Top/Bottom por chamadas atendidas (apenas agentes com login) ──
+        const humanAgents = agentDayRows.filter(r => r.login && r.login.trim() !== "");
+        const sortedByChamadas = [...humanAgents].sort((a, b) => (b.chamadasAtendidas ?? 0) - (a.chamadasAtendidas ?? 0));
+        const top5Chamadas = sortedByChamadas.slice(0, 5).map(r => ({
+          agente: r.agente ?? "",
+          valor: r.chamadasAtendidas ?? 0,
+          detalhe: `CPC: ${r.contatoEfetivo ?? 0}`,
+        }));
+        const bottom5Chamadas = [...humanAgents]
+          .filter(r => (r.chamadasAtendidas ?? 0) > 0)
+          .sort((a, b) => (a.chamadasAtendidas ?? 0) - (b.chamadasAtendidas ?? 0))
+          .slice(0, 5)
+          .map(r => ({
+            agente: r.agente ?? "",
+            valor: r.chamadasAtendidas ?? 0,
+            detalhe: `Ocioso: ${r.tempoOcioso ?? "00:00:00"}`,
+          }));
+
+        // ── Faixa 2: Top 5 por pausas improdutivas ──────────────────────────────
+        function isImprodutiva(motivo: string): boolean {
+          const m = motivo.toLowerCase().trim();
+          if (m.includes("feedback")) return false;
+          if (m.includes("erro de sistema") || m.includes("erro sistema") || m === "erro") return false;
+          if (m.includes("atendimento chat") || m === "chat") return false;
+          return true;
+        }
+        const byAgenteImprod: Record<string, { agente: string; totalSegundos: number; totalPausas: number }> = {};
+        for (const row of reasonRows) {
+          const motivo = row.motivoDePausa || "";
+          if (!isImprodutiva(motivo)) continue;
+          const agente = row.agente || "Desconhecido";
+          const seg = timeToSeconds(row.tempoTotalDePausa);
+          const pausas = row.pausasTotalizadoPorCampanha || 0;
+          if (!byAgenteImprod[agente]) byAgenteImprod[agente] = { agente, totalSegundos: 0, totalPausas: 0 };
+          byAgenteImprod[agente].totalSegundos += seg;
+          byAgenteImprod[agente].totalPausas += pausas;
+        }
+        const secToHMS = (s: number) => {
+          const h = Math.floor(s / 3600);
+          const m = Math.floor((s % 3600) / 60);
+          const sec = s % 60;
+          return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+        };
+        const top5Pausas = Object.values(byAgenteImprod)
+          .sort((a, b) => b.totalSegundos - a.totalSegundos)
+          .slice(0, 5)
+          .map(r => ({
+            agente: r.agente,
+            valor: r.totalSegundos,
+            detalhe: secToHMS(r.totalSegundos),
+          }));
+
+        // ── Faixa 3: Top 5 campanhas por chamadas ──────────────────────────────
+        const byCampanha: Record<string, { campanha: string; totalChamadas: number; totalContatos: number }> = {};
+        for (const row of campaignRows) {
+          const camp = row.campanha || "Sem campanha";
+          if (!byCampanha[camp]) byCampanha[camp] = { campanha: camp, totalChamadas: 0, totalContatos: 0 };
+          byCampanha[camp].totalChamadas += row.totalChamadas || 0;
+          byCampanha[camp].totalContatos += row.totalContatos || 0;
+        }
+        const top5Campanhas = Object.values(byCampanha)
+          .sort((a, b) => b.totalChamadas - a.totalChamadas)
+          .slice(0, 5)
+          .map(r => ({
+            agente: r.campanha,
+            valor: r.totalChamadas,
+            detalhe: `Conv: ${r.totalChamadas > 0 ? ((r.totalContatos / r.totalChamadas) * 100).toFixed(1) : 0}%`,
+          }));
+
+        // ── Faixa 4: Top 5 por tabulações excedidas ────────────────────────────
+        const byAgenteDisp: Record<string, { agente: string; ocorrencias: number; supervisor: string }> = {};
+        for (const row of dispositionRows) {
+          const agente = row.agente || "Desconhecido";
+          if (!byAgenteDisp[agente]) byAgenteDisp[agente] = { agente, ocorrencias: 0, supervisor: row.nomeSupervisor || "" };
+          byAgenteDisp[agente].ocorrencias += 1;
+        }
+        const top5Tabulacoes = Object.values(byAgenteDisp)
+          .sort((a, b) => b.ocorrencias - a.ocorrencias)
+          .slice(0, 5)
+          .map(r => ({
+            agente: r.agente,
+            valor: r.ocorrencias,
+            detalhe: `Sup: ${r.supervisor || "—"}`,
+          }));
+
+        return {
+          top5Chamadas,
+          bottom5Chamadas,
+          top5Pausas,
+          top5Campanhas,
+          top5Tabulacoes,
+        };
+      }),
+
     // ─── Filtros disponíveis ───────────────────────────────────────────────
     getFilters: publicProcedure
       .input(z.object({ sessionIds: z.array(z.number()).optional() }))

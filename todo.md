@@ -111,3 +111,10 @@
 - [x] BUG: Tabulações Excedidas — corrigido: contagem de ocorrências como métrica principal; ranking ordenado por qtd; tempo total como métrica secundária
 - [x] MELHORIA: Tabulações Excedidas — filtros de supervisor, minTempo e minChamadas adicionados no router e no frontend
 - [x] BUG: Controle de Pausas — corrigido: isImprodutiva() agora exclui apenas Feedback, Erro de Sistema e Atendimento Chat; todas as demais são improdutivas por padrão
+
+## Relatório Executivo Consolidado (29/06/2026)
+
+- [x] Endpoint tRPC getExecutiveReport retornando top5/bottom5 das 4 faixas
+- [x] Componente ExecutiveReportModal com layout visual dark para exportação PNG
+- [x] Botão "Relatório Executivo" na sidebar e no top bar
+- [x] Exportação PNG consolidado com toPng (skipFonts, cacheBust)
