@@ -398,7 +398,8 @@ export default function AgentDayPage() {
         </TabsContent>
 
         {/* ── Aba: Análise por Quartil ── */}
-        <TabsContent value="quartil" className="space-y-5 mt-4">
+        {/* forceMount garante que o DOM existe mesmo quando a aba está inativa, permitindo exportação PNG */}
+        <TabsContent value="quartil" className="space-y-5 mt-4" forceMount>
           {/* Cards de resumo por quartil */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {(["Q1", "Q2", "Q3", "Q4"] as const).map(q => {

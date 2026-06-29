@@ -129,17 +129,20 @@ export const appRouter = router({
           agente: input.agente,
         });
 
-        // Regras de classificação de pausas improdutivas:
-        // - "Atendimento Chat" NÃO é improdutiva (é trabalho produtivo)
-        // - Descanso 1, 2, 3 e Lanche SÃO improdutivas (pausas estouradas)
-        // - Banheiro > 10 min É improdutiva
-        // - Demais pausas: mantidas como estão no relatório geral
-        function isImprodutiva(motivo: string, segundos: number): boolean {
+        // Regras de classificação de pausas improdutivas (v2):
+        // NÃO são improdutivas (excluir da aba de improdutivas):
+        //   - "Pausa Feedback" / "Feedback"
+        //   - "Erro de Sistema" / "Erro Sistema"
+        //   - "Atendimento Chat" / "Chat"
+        // TODAS as demais pausas SÃO improdutivas por padrão
+        function isImprodutiva(motivo: string, _segundos: number): boolean {
           const m = motivo.toLowerCase().trim();
+          // Exclusões explícitas
+          if (m.includes("feedback")) return false;
+          if (m.includes("erro de sistema") || m.includes("erro sistema") || m === "erro") return false;
           if (m.includes("atendimento chat") || m === "chat") return false;
-          if (m.includes("descanso") || m.includes("lanche")) return true;
-          if (m.includes("banheiro") && segundos > 600) return true; // > 10 min
-          return false;
+          // Tudo o mais é improdutivo
+          return true;
         }
 
         // Agrupa TODAS as pausas por motivo (visão geral)
@@ -173,9 +176,9 @@ export const appRouter = router({
           }
         }
 
-        // Visão geral de todos os motivos (exceto Atendimento Chat)
+        // Visão geral: inclui TODOS os motivos (inclusive os não-improdutivos, para transparência)
+        // Marcados com improdutiva: true/false para o frontend poder diferenciar visualmente
         const motivoChart = Object.values(byMotivo)
-          .filter(m => !m.motivo.toLowerCase().includes("atendimento chat") && !m.motivo.toLowerCase().includes("chat"))
           .map(m => ({ ...m, agentes: m.agentes.size }))
           .sort((a, b) => b.totalSegundos - a.totalSegundos);
 
@@ -281,6 +284,8 @@ export const appRouter = router({
       .input(z.object({
         sessionIds: z.array(z.number()).optional(),
         supervisor: z.string().optional(),
+        minTempoSeg: z.number().optional(),   // filtro: tempo mínimo em segundos
+        minChamadas: z.number().optional(),    // filtro: mínimo de chamadas
       }))
       .query(async ({ input }) => {
         const rows = await getDispositionAgentRecords({
@@ -288,34 +293,54 @@ export const appRouter = router({
           supervisor: input.supervisor,
         });
 
-        // Ranking por agente
-        const byAgente: Record<string, { agente: string; supervisor: string; totalSegundos: number; totalChamadas: number }> = {};
-        const bySupervisor: Record<string, { supervisor: string; totalSegundos: number; totalChamadas: number; agentes: number }> = {};
+        // Métrica principal: ocorrências (cada linha = 1 tabulação excedida)
+        const byAgente: Record<string, {
+          agente: string; supervisor: string;
+          ocorrencias: number; totalSegundos: number; totalChamadas: number;
+        }> = {};
+        const bySupervisor: Record<string, {
+          supervisor: string;
+          ocorrencias: number; totalSegundos: number; totalChamadas: number; agentesSet: Set<string>;
+        }> = {};
 
         for (const row of rows) {
           const agente = row.agente || "Desconhecido";
           const supervisor = row.nomeSupervisor || "Sem supervisor";
           const segundos = timeToSeconds(row.tempoTabulacao);
 
-          if (!byAgente[agente]) byAgente[agente] = { agente, supervisor, totalSegundos: 0, totalChamadas: 0 };
+          if (!byAgente[agente]) byAgente[agente] = { agente, supervisor, ocorrencias: 0, totalSegundos: 0, totalChamadas: 0 };
+          byAgente[agente].ocorrencias += 1;
           byAgente[agente].totalSegundos += segundos;
           byAgente[agente].totalChamadas += row.totalChamadas || 0;
 
-          if (!bySupervisor[supervisor]) bySupervisor[supervisor] = { supervisor, totalSegundos: 0, totalChamadas: 0, agentes: 0 };
+          if (!bySupervisor[supervisor]) bySupervisor[supervisor] = { supervisor, ocorrencias: 0, totalSegundos: 0, totalChamadas: 0, agentesSet: new Set() };
+          bySupervisor[supervisor].ocorrencias += 1;
           bySupervisor[supervisor].totalSegundos += segundos;
           bySupervisor[supervisor].totalChamadas += row.totalChamadas || 0;
-          bySupervisor[supervisor].agentes += 1;
+          bySupervisor[supervisor].agentesSet.add(agente);
         }
 
-        const agenteRanking = Object.values(byAgente)
-          .sort((a, b) => b.totalSegundos - a.totalSegundos)
-          .slice(0, 20);
+        const secToHMS = (s: number) => {
+          const h = Math.floor(s / 3600);
+          const m = Math.floor((s % 3600) / 60);
+          const sec = s % 60;
+          return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
+        };
+
+        let agenteRanking = Object.values(byAgente)
+          .map(a => ({ ...a, tempoFormatado: secToHMS(a.totalSegundos) }))
+          .sort((a, b) => b.ocorrencias - a.ocorrencias);
+
+        // Aplica filtros opcionais
+        if (input.minTempoSeg) agenteRanking = agenteRanking.filter(a => a.totalSegundos >= (input.minTempoSeg ?? 0));
+        if (input.minChamadas) agenteRanking = agenteRanking.filter(a => a.totalChamadas >= (input.minChamadas ?? 0));
 
         const supervisorRanking = Object.values(bySupervisor)
-          .sort((a, b) => b.totalSegundos - a.totalSegundos)
+          .map(s => ({ supervisor: s.supervisor, ocorrencias: s.ocorrencias, totalSegundos: s.totalSegundos, totalChamadas: s.totalChamadas, agentesCount: s.agentesSet.size, tempoFormatado: secToHMS(s.totalSegundos) }))
+          .sort((a, b) => b.ocorrencias - a.ocorrencias)
           .slice(0, 10);
 
-        return { rows, agenteRanking, supervisorRanking };
+        return { rows, agenteRanking: agenteRanking.slice(0, 20), supervisorRanking };
       }),
 
     // ─── Cards de Resumo Executivo ─────────────────────────────────────────

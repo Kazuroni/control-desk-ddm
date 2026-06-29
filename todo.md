@@ -104,3 +104,10 @@
 
 - [x] Alinhar filtros globais com cada faixa: GlobalFilters agora é contextual por SECTION_FILTERS, exibindo apenas filtros aplicáveis por faixa ativa
 - [x] Testes cobrindo filtros por faixa: 5 testes adicionados em SECTION_FILTERS contextual logic (18 testes total)
+
+## Correções Solicitadas (29/06/2026 - v4)
+
+- [ ] BUG: Exportação PNG do quartil retorna "não há nada para exportar" na aba "Análise por Quartil"
+- [ ] BUG: Tabulações Excedidas deve mostrar contagem de tabulações excedidas como métrica principal (não só tempo total)
+- [ ] MELHORIA: Tabulações Excedidas — adicionar filtros de supervisor, tempo tabulado e total de chamadas
+- [ ] BUG: Controle de Pausas — regra de improdutivas incorreta; excluir APENAS "Pausa Feedback", "Erro de Sistema" e "Pausa Atendimento Chat"; todas as demais são improdutivas
