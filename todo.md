@@ -92,3 +92,10 @@
 - [x] MELHORIA: Faixa 1 - Quartil visual com gráficos + dados tabulares por agente
 - [x] MELHORIA: Faixa 2 - Filtrar "Atendimento Chat" como NÃO improdutiva; manter apenas pausas realmente estouradas (Descanso 1/2/3, Lanche, Banheiro >10min)
 - [x] MELHORIA: Faixa 3 - Visão hierárquica agente → células (expansível), conforme imagem ATTCEL
+
+## Ajustes Solicitados (29/06/2026)
+
+- [ ] BUG: Modo de sessão — ao reimportar, dados se acumulam em vez de substituir; implementar modo "relatório diário" que substitui a sessão do mesmo tipo/data
+- [ ] BUG: BOTs sem campo "login" aparecem na Faixa 1 — filtrar agentes com login vazio/nulo
+- [ ] BUG: Filtros globais e por faixa não funcionam corretamente — diagnosticar e corrigir
+- [ ] MELHORIA: Exportação PNG dupla na Faixa 1: (a) tabela completa estilo PERFORMANCEEXEMPLO + (b) quartil separado

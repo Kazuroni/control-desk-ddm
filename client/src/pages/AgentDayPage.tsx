@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useDashboard } from "@/contexts/DashboardContext";
 import {
@@ -86,6 +86,7 @@ export default function AgentDayPage() {
   const [ufFilter, setUfFilter] = useState("all");
   const [quartilFilter, setQuartilFilter] = useState("all");
   const exportRef = useRef<HTMLDivElement>(null);
+  const tableExportRef = useRef<HTMLDivElement>(null);
 
   const { data: rows = [], isLoading } = trpc.dashboard.getAgentDay.useQuery({
     sessionIds: filters.sessionIds.length > 0 ? filters.sessionIds : undefined,
@@ -98,23 +99,29 @@ export default function AgentDayPage() {
     return Array.from(set).sort() as string[];
   }, [rows]);
 
+  // Filtra BOTs: agentes sem login (apenas discadores automáticos)
+  const humanRows = useMemo(() =>
+    rows.filter(r => r.login && r.login.trim() !== ""),
+    [rows]
+  );
+
   // Calcula quartis baseados em chamadas atendidas
   const quartiles = useMemo(() => {
-    const vals = rows.map(r => r.chamadasAtendidas ?? 0);
+    const vals = humanRows.map(r => r.chamadasAtendidas ?? 0);
     return calcQuartiles(vals);
-  }, [rows]);
+  }, [humanRows]);
 
   // Enriquece cada linha com seu quartil
   const rowsWithQuartil = useMemo(() =>
-    rows.map(r => ({
+    humanRows.map(r => ({
       ...r,
       _quartil: getQuartilLabel(r.chamadasAtendidas ?? 0, quartiles.q1, quartiles.q2, quartiles.q3),
     })),
-    [rows, quartiles]
+    [humanRows, quartiles]
   );
 
   const filtered = useMemo(() => {
-    let data = [...rowsWithQuartil];
+    let data = [...rowsWithQuartil]; // já sem BOTs
     if (search) data = data.filter(r =>
       r.agente?.toLowerCase().includes(search.toLowerCase()) ||
       r.login?.toLowerCase().includes(search.toLowerCase())
@@ -181,24 +188,27 @@ export default function AgentDayPage() {
     else { setSortKey(key); setSortDir("desc"); }
   };
 
-  const handleExport = async () => {
-    if (!exportRef.current) return;
+  const exportPng = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
+    if (!ref.current) { toast.error("Nada para exportar"); return; }
     try {
       toast.info("Gerando imagem...");
-      const url = await toPng(exportRef.current, {
+      const url = await toPng(ref.current, {
         backgroundColor: "#0f1117",
         pixelRatio: 2,
         style: { borderRadius: "0" }
       });
       const a = document.createElement("a");
       a.href = url;
-      a.download = `performance-tempo-real-${new Date().toISOString().slice(0, 10)}.png`;
+      a.download = filename;
       a.click();
       toast.success("Imagem exportada com sucesso");
     } catch (e) {
       toast.error("Erro ao exportar imagem");
     }
   };
+
+  const handleExportTable = () => exportPng(tableExportRef, `performance-tabela-${new Date().toISOString().slice(0, 10)}.png`);
+  const handleExportQuartil = () => exportPng(exportRef, `performance-quartil-${new Date().toISOString().slice(0, 10)}.png`);
 
   const QUARTIL_COLORS: Record<string, string> = {
     Q1: "#22c55e", Q2: "#3b82f6", Q3: "#f59e0b", Q4: "#ef4444"
@@ -222,12 +232,17 @@ export default function AgentDayPage() {
         <div>
           <h2 className="text-xl font-bold text-foreground">Performance em Tempo Real</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Relatório AgentDay — {rows.length} agentes · Q1 ≥ {quartiles.q3} · Q2 ≥ {quartiles.q2} · Q3 ≥ {quartiles.q1}
+            Relatório AgentDay — {humanRows.length} agentes · {rows.length - humanRows.length > 0 ? `${rows.length - humanRows.length} BOTs excluídos · ` : ""}Q1 ≥ {quartiles.q3} · Q2 ≥ {quartiles.q2} · Q3 ≥ {quartiles.q1}
           </p>
         </div>
-        <Button onClick={handleExport} variant="outline" size="sm" className="gap-2">
-          <Download className="w-4 h-4" /> Exportar PNG
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={handleExportTable} variant="outline" size="sm" className="gap-2">
+            <Download className="w-4 h-4" /> PNG Tabela
+          </Button>
+          <Button onClick={handleExportQuartil} variant="outline" size="sm" className="gap-2 border-primary/40 text-primary hover:bg-primary/10">
+            <Award className="w-4 h-4" /> PNG Quartil
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="tabela">
@@ -276,6 +291,25 @@ export default function AgentDayPage() {
             </Select>
           </div>
 
+          {/* Área exportável da tabela completa */}
+          <div ref={tableExportRef} className="bg-[#0f1117] rounded-xl space-y-3 p-4">
+          {/* Cabeçalho do PNG da tabela */}
+          <div className="flex items-center justify-between border-b border-border/50 pb-3 mb-1">
+            <div>
+              <h3 className="text-sm font-bold text-foreground">Performance em Tempo Real — Tabela Completa</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">{new Date().toLocaleDateString("pt-BR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} · {humanRows.length} agentes</p>
+            </div>
+            <div className="flex gap-2">
+              {(["Q1","Q2","Q3","Q4"] as const).map(q => (
+                <div key={q} className={`text-xs font-bold px-2 py-0.5 rounded ${
+                  q==="Q1" ? "bg-emerald-500/20 text-emerald-400" :
+                  q==="Q2" ? "bg-blue-500/20 text-blue-400" :
+                  q==="Q3" ? "bg-amber-500/20 text-amber-400" :
+                  "bg-red-500/20 text-red-400"
+                }`}>{q}: {quartilGroups[q].length}</div>
+              ))}
+            </div>
+          </div>
           {/* Tabela */}
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
@@ -360,6 +394,7 @@ export default function AgentDayPage() {
               </table>
             </div>
           </div>
+          </div>{/* fim tableExportRef */}
         </TabsContent>
 
         {/* ── Aba: Análise por Quartil ── */}

@@ -1,4 +1,4 @@
-import { eq, desc, and, like, inArray } from "drizzle-orm";
+import { eq, desc, and, like, inArray, isNotNull, ne } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, uploadSessions, agentDayRecords, reasonAgentRecords, campaignAgentRecords, dispositionAgentRecords } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -51,6 +51,12 @@ export async function getUserByOpenId(openId: string) {
 }
 
 // ─── Upload Sessions ───────────────────────────────────────────────────────────
+
+/**
+ * Cria nova sessão de upload e apaga sessões antigas do mesmo tipo.
+ * Comportamento "relatório diário": cada importação substitui a anterior do mesmo tipo.
+ * Retorna o ID da nova sessão.
+ */
 export async function createUploadSession(data: {
   reportType: "AgentDay" | "ReasonAgent" | "CampaignAgent" | "DispositionAgent";
   fileName: string;
@@ -61,6 +67,35 @@ export async function createUploadSession(data: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+
+  // 1. Buscar sessões antigas do mesmo tipo para deletar dados
+  const oldSessions = await db
+    .select({ id: uploadSessions.id })
+    .from(uploadSessions)
+    .where(eq(uploadSessions.reportType, data.reportType));
+
+  if (oldSessions.length > 0) {
+    const oldIds = oldSessions.map(s => s.id);
+    // Deletar registros antigos do tipo correspondente
+    switch (data.reportType) {
+      case "AgentDay":
+        await db.delete(agentDayRecords).where(inArray(agentDayRecords.sessionId, oldIds));
+        break;
+      case "ReasonAgent":
+        await db.delete(reasonAgentRecords).where(inArray(reasonAgentRecords.sessionId, oldIds));
+        break;
+      case "CampaignAgent":
+        await db.delete(campaignAgentRecords).where(inArray(campaignAgentRecords.sessionId, oldIds));
+        break;
+      case "DispositionAgent":
+        await db.delete(dispositionAgentRecords).where(inArray(dispositionAgentRecords.sessionId, oldIds));
+        break;
+    }
+    // Deletar sessões antigas
+    await db.delete(uploadSessions).where(inArray(uploadSessions.id, oldIds));
+  }
+
+  // 2. Criar nova sessão
   const [result] = await db.insert(uploadSessions).values(data).$returningId();
   return result;
 }
@@ -68,13 +103,27 @@ export async function createUploadSession(data: {
 export async function getUploadSessions(reportType?: string) {
   const db = await getDb();
   if (!db) return [];
-  const query = db.select().from(uploadSessions).orderBy(desc(uploadSessions.createdAt));
   if (reportType) {
     return await db.select().from(uploadSessions)
       .where(eq(uploadSessions.reportType, reportType as any))
       .orderBy(desc(uploadSessions.createdAt));
   }
-  return await query;
+  return await db.select().from(uploadSessions).orderBy(desc(uploadSessions.createdAt));
+}
+
+/**
+ * Retorna o ID da sessão mais recente de um dado tipo.
+ * Usado como fallback quando nenhuma sessão está selecionada.
+ */
+export async function getLatestSessionId(reportType: "AgentDay" | "ReasonAgent" | "CampaignAgent" | "DispositionAgent"): Promise<number | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select({ id: uploadSessions.id })
+    .from(uploadSessions)
+    .where(eq(uploadSessions.reportType, reportType))
+    .orderBy(desc(uploadSessions.createdAt))
+    .limit(1);
+  return result.length > 0 ? result[0].id : null;
 }
 
 // ─── AgentDay Records ──────────────────────────────────────────────────────────
@@ -96,13 +145,22 @@ export async function getAgentDayRecords(filters: {
 }) {
   const db = await getDb();
   if (!db) return [];
-  let query = db.select().from(agentDayRecords);
+
+  // Se não há sessionIds, usa a sessão mais recente do tipo AgentDay
+  let sessionIds = filters.sessionIds;
+  if (!sessionIds || sessionIds.length === 0) {
+    const latestId = await getLatestSessionId("AgentDay");
+    if (latestId) sessionIds = [latestId];
+  }
+
   const conditions = [];
-  if (filters.sessionIds?.length) conditions.push(inArray(agentDayRecords.sessionId, filters.sessionIds));
+  if (sessionIds?.length) conditions.push(inArray(agentDayRecords.sessionId, sessionIds));
   if (filters.agente) conditions.push(like(agentDayRecords.agente, `%${filters.agente}%`));
   if (filters.uf) conditions.push(eq(agentDayRecords.uf, filters.uf));
-  if (conditions.length > 0) return await db.select().from(agentDayRecords).where(and(...conditions));
-  return await db.select().from(agentDayRecords).orderBy(desc(agentDayRecords.chamadasAtendidas));
+  // Exclui BOTs: agentes sem login são discadores automáticos, não devem aparecer no dashboard
+  conditions.push(and(isNotNull(agentDayRecords.login), ne(agentDayRecords.login, "")));
+
+  return await db.select().from(agentDayRecords).where(and(...conditions)).orderBy(desc(agentDayRecords.chamadasAtendidas));
 }
 
 // ─── ReasonAgent Records ───────────────────────────────────────────────────────
@@ -120,9 +178,17 @@ export async function insertReasonAgentRecords(sessionId: number, rows: any[]) {
 export async function getReasonAgentRecords(filters: { sessionIds?: number[]; agente?: string }) {
   const db = await getDb();
   if (!db) return [];
+
+  let sessionIds = filters.sessionIds;
+  if (!sessionIds || sessionIds.length === 0) {
+    const latestId = await getLatestSessionId("ReasonAgent");
+    if (latestId) sessionIds = [latestId];
+  }
+
   const conditions = [];
-  if (filters.sessionIds?.length) conditions.push(inArray(reasonAgentRecords.sessionId, filters.sessionIds));
+  if (sessionIds?.length) conditions.push(inArray(reasonAgentRecords.sessionId, sessionIds));
   if (filters.agente) conditions.push(like(reasonAgentRecords.agente, `%${filters.agente}%`));
+
   if (conditions.length > 0) return await db.select().from(reasonAgentRecords).where(and(...conditions));
   return await db.select().from(reasonAgentRecords);
 }
@@ -146,10 +212,18 @@ export async function getCampaignAgentRecords(filters: {
 }) {
   const db = await getDb();
   if (!db) return [];
+
+  let sessionIds = filters.sessionIds;
+  if (!sessionIds || sessionIds.length === 0) {
+    const latestId = await getLatestSessionId("CampaignAgent");
+    if (latestId) sessionIds = [latestId];
+  }
+
   const conditions = [];
-  if (filters.sessionIds?.length) conditions.push(inArray(campaignAgentRecords.sessionId, filters.sessionIds));
+  if (sessionIds?.length) conditions.push(inArray(campaignAgentRecords.sessionId, sessionIds));
   if (filters.campanha) conditions.push(like(campaignAgentRecords.campanha, `%${filters.campanha}%`));
   if (filters.supervisor) conditions.push(like(campaignAgentRecords.nomeSupervisor, `%${filters.supervisor}%`));
+
   if (conditions.length > 0) return await db.select().from(campaignAgentRecords).where(and(...conditions));
   return await db.select().from(campaignAgentRecords);
 }
@@ -172,9 +246,17 @@ export async function getDispositionAgentRecords(filters: {
 }) {
   const db = await getDb();
   if (!db) return [];
+
+  let sessionIds = filters.sessionIds;
+  if (!sessionIds || sessionIds.length === 0) {
+    const latestId = await getLatestSessionId("DispositionAgent");
+    if (latestId) sessionIds = [latestId];
+  }
+
   const conditions = [];
-  if (filters.sessionIds?.length) conditions.push(inArray(dispositionAgentRecords.sessionId, filters.sessionIds));
+  if (sessionIds?.length) conditions.push(inArray(dispositionAgentRecords.sessionId, sessionIds));
   if (filters.supervisor) conditions.push(like(dispositionAgentRecords.nomeSupervisor, `%${filters.supervisor}%`));
+
   if (conditions.length > 0) return await db.select().from(dispositionAgentRecords).where(and(...conditions));
   return await db.select().from(dispositionAgentRecords);
 }

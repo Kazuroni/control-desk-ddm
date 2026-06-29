@@ -54,14 +54,7 @@ export default function Home() {
           )}
         </div>
 
-        {/* Sessões selecionadas */}
-        {!sidebarCollapsed && filters.sessionIds.length > 0 && (
-          <div className="mx-3 mt-3 px-3 py-2 bg-primary/10 border border-primary/20 rounded-lg">
-            <p className="text-xs text-primary font-medium">
-              {filters.sessionIds.length} sessão(ões) ativa(s)
-            </p>
-          </div>
-        )}
+        {/* Modo diário: sem seleção manual de sessões */}
 
         {/* Nav */}
         <nav className="flex-1 py-4 space-y-1 px-2 overflow-y-auto">

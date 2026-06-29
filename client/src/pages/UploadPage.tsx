@@ -1,7 +1,10 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Upload, FileText, CheckCircle2, AlertCircle, Loader2, History, Trash2, RefreshCw } from "lucide-react";
+import {
+  Upload, FileText, CheckCircle2, AlertCircle, Loader2,
+  RefreshCw, Info, ArrowRight, RotateCcw
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useDashboard } from "@/contexts/DashboardContext";
@@ -21,17 +24,22 @@ interface UploadItem {
   reportType?: string;
   message?: string;
   rows?: number;
+  sessionId?: number;
 }
 
 export default function UploadPage() {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { filters, setFilter } = useDashboard();
+  const { setActiveSection } = useDashboard();
 
   const utils = trpc.useUtils();
   const { data: sessions, refetch: refetchSessions } = trpc.dashboard.getSessions.useQuery({});
   const processReport = trpc.dashboard.processReport.useMutation();
+
+  // Conta quantos tipos de relatório já foram importados na sessão atual
+  const importedTypes = items.filter(i => i.status === "success").map(i => i.reportType);
+  const allImported = REPORT_TYPES.every(rt => importedTypes.includes(rt.key));
 
   const readFileAsText = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -50,27 +58,37 @@ export default function UploadPage() {
         fileName: file.name,
       });
       setItems(prev => prev.map((item, i) =>
-        i === index ? { ...item, status: "success", reportType: result.reportType, rows: result.totalRows, message: `${result.totalRows} registros importados` } : item
+        i === index
+          ? { ...item, status: "success", reportType: result.reportType, rows: result.totalRows, sessionId: result.sessionId, message: `${result.totalRows} registros` }
+          : item
       ));
-      toast.success(`${result.reportType} importado com sucesso — ${result.totalRows} registros`);
-      refetchSessions();
+      toast.success(`${result.reportType} importado — ${result.totalRows} registros`);
+      // Invalida todas as queries para forçar recarregamento com dados novos
+      utils.dashboard.getSessions.invalidate();
       utils.dashboard.getSummary.invalidate();
+      utils.dashboard.getAgentDay.invalidate();
+      utils.dashboard.getReasonAgent.invalidate();
+      utils.dashboard.getCampaignAgent.invalidate();
+      utils.dashboard.getDispositionAgent.invalidate();
+      utils.dashboard.getFilters.invalidate();
     } catch (err: any) {
       const msg = err?.message || "Erro ao processar arquivo";
       setItems(prev => prev.map((item, i) => i === index ? { ...item, status: "error", message: msg } : item));
       toast.error(msg);
     }
-  }, [processReport, refetchSessions, utils]);
+  }, [processReport, utils]);
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const arr = Array.from(files).filter(f => f.name.match(/\.xls$/i));
-    if (arr.length === 0) { toast.error("Apenas arquivos .xls (HTML) exportados do sistema de discagem são aceitos"); return; }
+    if (arr.length === 0) {
+      toast.error("Apenas arquivos .xls exportados do sistema de discagem são aceitos");
+      return;
+    }
     const newItems: UploadItem[] = arr.map(file => ({ file, status: "pending" }));
     setItems(prev => {
       const updated = [...prev, ...newItems];
-      // Processa automaticamente
       newItems.forEach((_, idx) => {
-        setTimeout(() => processFile(arr[idx], prev.length + idx), 100 * idx);
+        setTimeout(() => processFile(arr[idx], prev.length + idx), 150 * idx);
       });
       return updated;
     });
@@ -82,37 +100,30 @@ export default function UploadPage() {
     addFiles(e.dataTransfer.files);
   }, [addFiles]);
 
-  const toggleSession = (id: number) => {
-    const current = filters.sessionIds;
-    const next = current.includes(id) ? current.filter(s => s !== id) : [...current, id];
-    setFilter("sessionIds", next);
-  };
+  const resetUpload = () => setItems([]);
 
-  const clearItems = () => setItems([]);
-
-  const groupedSessions = sessions ? REPORT_TYPES.map(rt => ({
+  // Sessão mais recente por tipo (apenas 1 por tipo — modo diário)
+  const latestByType = REPORT_TYPES.map(rt => ({
     ...rt,
-    sessions: sessions.filter(s => s.reportType === rt.key),
-  })) : [];
+    session: sessions?.find(s => s.reportType === rt.key),
+  }));
 
   return (
-    <div className="space-y-8 animate-fade-in-up">
+    <div className="space-y-8 animate-fade-in-up max-w-3xl mx-auto">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Importar Relatórios</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Arraste os arquivos exportados do sistema de discagem para importar automaticamente.
+          Arraste os 4 arquivos exportados do sistema de discagem. Cada importação <strong>substitui</strong> o relatório anterior do mesmo tipo — os dados sempre refletem a última importação.
         </p>
       </div>
 
-      {/* Tipos de relatório */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {REPORT_TYPES.map(rt => (
-          <div key={rt.key} className="kpi-card flex flex-col gap-1">
-            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${rt.color}`}>{rt.label}</span>
-            <span className="text-xs text-muted-foreground mt-1">{rt.desc}</span>
-          </div>
-        ))}
+      {/* Aviso de modo diário */}
+      <div className="flex items-start gap-3 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+        <Info className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+        <div className="text-sm text-blue-300">
+          <strong>Modo Relatório Diário:</strong> ao importar um arquivo, os dados anteriores do mesmo tipo são substituídos automaticamente. Não há acúmulo histórico — o dashboard sempre exibe o snapshot mais recente.
+        </div>
       </div>
 
       {/* Zona de drop */}
@@ -145,102 +156,107 @@ export default function UploadPage() {
             <p className="font-semibold text-foreground">Arraste os arquivos aqui</p>
             <p className="text-sm text-muted-foreground mt-1">ou clique para selecionar — arquivos .xls exportados do sistema</p>
           </div>
+          <div className="flex flex-wrap gap-2 justify-center mt-1">
+            {REPORT_TYPES.map(rt => (
+              <span key={rt.key} className={`text-xs px-2 py-0.5 rounded-full border ${rt.color}`}>{rt.label}</span>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Lista de arquivos em processamento */}
       {items.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground">Arquivos desta sessão</h3>
-            <Button variant="ghost" size="sm" onClick={clearItems} className="text-muted-foreground hover:text-foreground">
-              <Trash2 className="w-3.5 h-3.5 mr-1" /> Limpar
+            <h3 className="text-sm font-semibold text-foreground">Importação em andamento</h3>
+            <Button variant="ghost" size="sm" onClick={resetUpload} className="text-muted-foreground hover:text-foreground gap-1.5">
+              <RotateCcw className="w-3.5 h-3.5" /> Limpar
             </Button>
           </div>
-          {items.map((item, i) => (
-            <div key={i} className="flex items-center gap-3 bg-card border border-border rounded-lg px-4 py-3">
-              <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
-              <span className="text-sm text-foreground flex-1 truncate">{item.file.name}</span>
-              {item.reportType && (
-                <Badge variant="outline" className="text-xs shrink-0">
-                  {item.reportType}
-                </Badge>
-              )}
-              <span className="text-xs text-muted-foreground shrink-0">{item.message}</span>
-              {item.status === "uploading" && <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />}
-              {item.status === "success" && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
-              {item.status === "error" && <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />}
+          <div className="space-y-2">
+            {items.map((item, i) => (
+              <div key={i} className={`flex items-center gap-3 rounded-lg px-4 py-3 border transition-all ${
+                item.status === "success" ? "bg-emerald-500/5 border-emerald-500/20" :
+                item.status === "error" ? "bg-red-500/5 border-red-500/20" :
+                "bg-card border-border"
+              }`}>
+                <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="text-sm text-foreground flex-1 truncate">{item.file.name}</span>
+                {item.reportType && (
+                  <Badge variant="outline" className="text-xs shrink-0">{item.reportType}</Badge>
+                )}
+                <span className="text-xs text-muted-foreground shrink-0">{item.message}</span>
+                {item.status === "uploading" && <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />}
+                {item.status === "success" && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+                {item.status === "error" && <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />}
+              </div>
+            ))}
+          </div>
+
+          {/* CTA para ir ao dashboard após todos importados */}
+          {allImported && (
+            <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-emerald-300">Todos os 4 relatórios importados!</p>
+                <p className="text-xs text-emerald-400/70 mt-0.5">O dashboard está pronto para visualização.</p>
+              </div>
+              <Button
+                size="sm"
+                className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white shrink-0"
+                onClick={() => setActiveSection("agentday")}
+              >
+                Ver Dashboard <ArrowRight className="w-3.5 h-3.5" />
+              </Button>
             </div>
-          ))}
+          )}
         </div>
       )}
 
-      {/* Histórico de uploads */}
-      <div className="space-y-4">
+      {/* Status atual dos relatórios no banco */}
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <History className="w-4 h-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold text-foreground">Histórico de Importações</h3>
-          </div>
-          <Button variant="ghost" size="sm" onClick={() => refetchSessions()} className="text-muted-foreground">
-            <RefreshCw className="w-3.5 h-3.5 mr-1" /> Atualizar
+          <h3 className="text-sm font-semibold text-foreground">Relatórios Ativos</h3>
+          <Button variant="ghost" size="sm" onClick={() => refetchSessions()} className="text-muted-foreground gap-1.5">
+            <RefreshCw className="w-3.5 h-3.5" /> Atualizar
           </Button>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Exibe o relatório mais recente de cada tipo. Ao importar novamente, o anterior é substituído.
+        </p>
 
-        {filters.sessionIds.length > 0 && (
-          <div className="flex items-center gap-2 p-3 bg-primary/10 border border-primary/20 rounded-lg">
-            <span className="text-xs text-primary font-medium">
-              {filters.sessionIds.length} sessão(ões) selecionada(s) para análise
-            </span>
-            <Button variant="ghost" size="sm" className="text-primary h-auto py-0 px-2 text-xs" onClick={() => setFilter("sessionIds", [])}>
-              Limpar seleção
-            </Button>
-          </div>
-        )}
-
-        {groupedSessions.map(group => group.sessions.length > 0 && (
-          <div key={group.key} className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${group.color}`}>{group.label}</span>
-              <span className="text-xs text-muted-foreground">{group.desc}</span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {latestByType.map(({ key, label, desc, color, session }) => (
+            <div key={key} className={`rounded-xl border p-4 transition-all ${
+              session ? "bg-card border-border" : "bg-muted/20 border-border/50 opacity-60"
+            }`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${color}`}>{label}</span>
+                  <p className="text-xs text-muted-foreground mt-1.5">{desc}</p>
+                </div>
+                {session
+                  ? <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  : <AlertCircle className="w-4 h-4 text-muted-foreground/40 shrink-0 mt-0.5" />
+                }
+              </div>
+              {session ? (
+                <div className="mt-3 space-y-1">
+                  <p className="text-xs text-foreground truncate font-medium">{session.fileName}</p>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span>{session.totalRows} registros</span>
+                    <span>·</span>
+                    <span>{session.referenceDate || "—"}</span>
+                    <span>·</span>
+                    <span>{format(new Date(session.createdAt), "dd/MM HH:mm", { locale: ptBR })}</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground/60 italic">Nenhum arquivo importado</p>
+              )}
             </div>
-            <div className="space-y-1">
-              {group.sessions.map(session => {
-                const isSelected = filters.sessionIds.includes(session.id);
-                return (
-                  <button
-                    key={session.id}
-                    onClick={() => toggleSession(session.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-left transition-all duration-150 ${
-                      isSelected
-                        ? "bg-primary/10 border-primary/30 text-foreground"
-                        : "bg-card border-border text-foreground hover:border-border/80 hover:bg-card/80"
-                    }`}
-                  >
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? "bg-primary" : "bg-muted-foreground/30"}`} />
-                    <span className="text-sm font-medium flex-1 truncate">{session.fileName}</span>
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {session.referenceDate || "—"}
-                    </span>
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {session.totalRows} registros
-                    </span>
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {format(new Date(session.createdAt), "dd/MM HH:mm", { locale: ptBR })}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-
-        {(!sessions || sessions.length === 0) && (
-          <div className="text-center py-10 text-muted-foreground">
-            <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">Nenhum arquivo importado ainda</p>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
     </div>
   );
