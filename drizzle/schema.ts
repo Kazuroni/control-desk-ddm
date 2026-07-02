@@ -125,3 +125,36 @@ export const dispositionAgentRecords = mysqlTable("disposition_agent_records", {
 });
 
 export type DispositionAgentRecord = typeof dispositionAgentRecords.$inferSelect;
+
+// Quadro de Dimensionamento — operadores cadastrados
+export const dimensionamento = mysqlTable("dimensionamento", {
+  id: int("id").autoincrement().primaryKey(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  login: varchar("login", { length: 128 }),
+  loginOlos: int("loginOlos"),
+  email: varchar("email", { length: 320 }),
+  supervisor: varchar("supervisor", { length: 128 }),
+  admissao: varchar("admissao", { length: 32 }),
+  nascimento: varchar("nascimento", { length: 32 }),
+  cpf: varchar("cpf", { length: 32 }),
+  funcao: varchar("funcao", { length: 255 }),
+  cargo: varchar("cargo", { length: 128 }),
+  departamento: varchar("departamento", { length: 128 }),
+  uf: varchar("uf", { length: 8 }),
+  status: varchar("status", { length: 32 }).default("ATIVO"),
+  discador: varchar("discador", { length: 64 }),
+  celula: varchar("celula", { length: 128 }),
+  skill: varchar("skill", { length: 255 }),
+  turno: varchar("turno", { length: 32 }),
+  escalaHora: varchar("escalaHora", { length: 16 }),
+  escala: varchar("escala", { length: 32 }),
+  entrada: varchar("entrada", { length: 16 }),
+  saida: varchar("saida", { length: 16 }),
+  entradaS: varchar("entradaS", { length: 16 }),
+  saidaS: varchar("saidaS", { length: 16 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Dimensionamento = typeof dimensionamento.$inferSelect;
+export type InsertDimensionamento = typeof dimensionamento.$inferInsert;

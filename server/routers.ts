@@ -14,6 +14,11 @@ import {
   insertReasonAgentRecords,
   insertCampaignAgentRecords,
   insertDispositionAgentRecords,
+  getDimensionamento,
+  getDimensionamentoStats,
+  insertDimensionamento,
+  updateDimensionamento,
+  deleteDimensionamento,
 } from "./db";
 import {
   detectReportType,
@@ -733,6 +738,96 @@ export const appRouter = router({
         ].filter(v => v && v.trim() && !/^\d+$/.test(v.trim())))).sort() as string[];
 
         return { agentes, ufs, campanhas, supervisores };
+      }),
+  }),
+
+  // ─── Dimensionamento ────────────────────────────────────────────────────────
+  dimensionamento: router({
+    list: publicProcedure
+      .input(z.object({
+        celula: z.string().optional(),
+        supervisor: z.string().optional(),
+        turno: z.string().optional(),
+        uf: z.string().optional(),
+        status: z.string().optional(),
+        search: z.string().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return await getDimensionamento(input || {});
+      }),
+
+    stats: publicProcedure.query(async () => {
+      return await getDimensionamentoStats();
+    }),
+
+    create: publicProcedure
+      .input(z.object({
+        nome: z.string().min(1),
+        login: z.string().optional(),
+        loginOlos: z.number().optional(),
+        email: z.string().optional(),
+        supervisor: z.string().optional(),
+        admissao: z.string().optional(),
+        nascimento: z.string().optional(),
+        cpf: z.string().optional(),
+        funcao: z.string().optional(),
+        cargo: z.string().optional(),
+        departamento: z.string().optional(),
+        uf: z.string().optional(),
+        status: z.string().optional(),
+        discador: z.string().optional(),
+        celula: z.string().optional(),
+        skill: z.string().optional(),
+        turno: z.string().optional(),
+        escalaHora: z.string().optional(),
+        escala: z.string().optional(),
+        entrada: z.string().optional(),
+        saida: z.string().optional(),
+        entradaS: z.string().optional(),
+        saidaS: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await insertDimensionamento(input);
+      }),
+
+    update: publicProcedure
+      .input(z.object({
+        id: z.number(),
+        nome: z.string().min(1).optional(),
+        login: z.string().optional(),
+        loginOlos: z.number().optional(),
+        email: z.string().optional(),
+        supervisor: z.string().optional(),
+        admissao: z.string().optional(),
+        nascimento: z.string().optional(),
+        cpf: z.string().optional(),
+        funcao: z.string().optional(),
+        cargo: z.string().optional(),
+        departamento: z.string().optional(),
+        uf: z.string().optional(),
+        status: z.string().optional(),
+        discador: z.string().optional(),
+        celula: z.string().optional(),
+        skill: z.string().optional(),
+        turno: z.string().optional(),
+        escalaHora: z.string().optional(),
+        escala: z.string().optional(),
+        entrada: z.string().optional(),
+        saida: z.string().optional(),
+        entradaS: z.string().optional(),
+        saidaS: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await updateDimensionamento(id, data);
+        return { success: true };
+      }),
+
+    delete: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteDimensionamento(input.id);
+        return { success: true };
       }),
   }),
 });

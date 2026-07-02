@@ -1,6 +1,6 @@
-import { eq, desc, and, like, inArray, isNotNull, ne } from "drizzle-orm";
+import { eq, desc, asc, and, or, like, inArray, isNotNull, ne } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, uploadSessions, agentDayRecords, reasonAgentRecords, campaignAgentRecords, dispositionAgentRecords } from "../drizzle/schema";
+import { InsertUser, InsertDimensionamento, users, uploadSessions, agentDayRecords, reasonAgentRecords, campaignAgentRecords, dispositionAgentRecords, dimensionamento } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -259,4 +259,74 @@ export async function getDispositionAgentRecords(filters: {
 
   if (conditions.length > 0) return await db.select().from(dispositionAgentRecords).where(and(...conditions));
   return await db.select().from(dispositionAgentRecords);
+}
+
+// ─── Dimensionamento ──────────────────────────────────────────────────────────
+
+export async function getDimensionamento(filters: {
+  celula?: string;
+  supervisor?: string;
+  turno?: string;
+  uf?: string;
+  status?: string;
+  search?: string;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions: any[] = [];
+  if (filters.celula) conditions.push(eq(dimensionamento.celula, filters.celula));
+  if (filters.supervisor) conditions.push(eq(dimensionamento.supervisor, filters.supervisor));
+  if (filters.turno) conditions.push(eq(dimensionamento.turno, filters.turno));
+  if (filters.uf) conditions.push(eq(dimensionamento.uf, filters.uf));
+  if (filters.status) conditions.push(eq(dimensionamento.status, filters.status));
+  if (filters.search) {
+    conditions.push(
+      or(
+        like(dimensionamento.nome, `%${filters.search}%`),
+        like(dimensionamento.login, `%${filters.search}%`)
+      )
+    );
+  }
+  if (conditions.length > 0) {
+    return await db.select().from(dimensionamento).where(and(...conditions)).orderBy(asc(dimensionamento.nome));
+  }
+  return await db.select().from(dimensionamento).orderBy(asc(dimensionamento.nome));
+}
+
+export async function insertDimensionamento(data: InsertDimensionamento) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [result] = await db.insert(dimensionamento).values(data).$returningId();
+  return result;
+}
+
+export async function updateDimensionamento(id: number, data: Partial<InsertDimensionamento>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(dimensionamento).set(data).where(eq(dimensionamento.id, id));
+}
+
+export async function deleteDimensionamento(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(dimensionamento).where(eq(dimensionamento.id, id));
+}
+
+export async function getDimensionamentoById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(dimensionamento).where(eq(dimensionamento.id, id)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getDimensionamentoStats() {
+  const db = await getDb();
+  if (!db) return { total: 0, ativos: 0, celulas: [], supervisores: [], turnos: [], ufs: [] };
+  const all = await db.select().from(dimensionamento);
+  const ativos = all.filter(r => r.status?.toUpperCase() === "ATIVO");
+  const celulas = Array.from(new Set(all.map(r => r.celula).filter(Boolean))).sort() as string[];
+  const supervisores = Array.from(new Set(all.map(r => r.supervisor).filter(Boolean))).sort() as string[];
+  const turnos = Array.from(new Set(all.map(r => r.turno).filter(Boolean))).sort() as string[];
+  const ufs = Array.from(new Set(all.map(r => r.uf).filter(Boolean))).sort() as string[];
+  return { total: all.length, ativos: ativos.length, celulas, supervisores, turnos, ufs };
 }
