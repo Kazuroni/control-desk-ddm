@@ -22,6 +22,29 @@ import {
   parseCampaignAgent,
   parseDispositionAgent,
 } from "./parsers";
+import { readFileSync, existsSync } from "fs";
+import { join } from "path";
+
+// Carrega o dimensionamento (mapeamento agente -> turno/célula/skill)
+function loadDimensionamento(): Record<string, { turno: string; celula: string; skill: string; supervisor: string; entrada: string; saida: string; uf: string }> {
+  const dimPath = join(process.cwd(), "dimensionamento.json");
+  if (!existsSync(dimPath)) return {};
+  try {
+    const data = JSON.parse(readFileSync(dimPath, "utf-8"));
+    const map: Record<string, any> = {};
+    for (const a of data.agents || []) {
+      if (a.nome) {
+        const key = a.nome.trim().toUpperCase();
+        map[key] = { turno: a.turno || "", celula: a.celula || "", skill: a.skill || "", supervisor: a.supervisor || "", entrada: a.entrada || "", saida: a.saida || "", uf: a.uf || "" };
+      }
+      if (a.login) {
+        const loginKey = `LOGIN:${a.login.trim().toLowerCase()}`;
+        map[loginKey] = { turno: a.turno || "", celula: a.celula || "", skill: a.skill || "", supervisor: a.supervisor || "", entrada: a.entrada || "", saida: a.saida || "", uf: a.uf || "" };
+      }
+    }
+    return map;
+  } catch { return {}; }
+}
 
 // Helper para converter tempo HH:MM:SS em segundos
 function timeToSeconds(t: string | null | undefined): number {
@@ -107,6 +130,9 @@ export const appRouter = router({
         sessionIds: z.array(z.number()).optional(),
         agente: z.string().optional(),
         uf: z.string().optional(),
+        turno: z.string().optional(),
+        celula: z.string().optional(),
+        supervisor: z.string().optional(),
       }))
       .query(async ({ input }) => {
         const rows = await getAgentDayRecords({
@@ -114,10 +140,65 @@ export const appRouter = router({
           agente: input.agente,
           uf: input.uf,
         });
-        return rows;
+
+        const dimMap = loadDimensionamento();
+
+        // Enriquece cada linha com métricas calculadas e dados do dimensionamento
+        const enriched = rows.map(row => {
+          const tempoLogadoSeg = timeToSeconds(row.tempoLogado);
+          const tempoOciosoSeg = timeToSeconds(row.tempoOcioso);
+          const tempoPausaSeg = timeToSeconds(row.tempoPausa);
+          const chamadas = row.chamadasAtendidas || 0;
+          const cpc = row.contatoEfetivo || 0;
+          const sucessoNeg = row.tabulacoesSucessoNegocio || 0;
+
+          // Idle = Tempo Ocioso / Chamadas Atendidas (em segundos por chamada)
+          const idleSeg = chamadas > 0 ? Math.round(tempoOciosoSeg / chamadas) : 0;
+          // TMA = (Tempo Logado - Tempo Ocioso - Tempo Pausa) / Chamadas Atendidas
+          const tempoFaladoSeg = Math.max(0, tempoLogadoSeg - tempoOciosoSeg - tempoPausaSeg);
+          const tmaSeg = chamadas > 0 ? Math.round(tempoFaladoSeg / chamadas) : 0;
+          // % CPC = CPC / Chamadas * 100
+          const cpcPct = chamadas > 0 ? Math.round((cpc / chamadas) * 100 * 10) / 10 : 0;
+          // % Sucesso Neg = Sucesso Neg / CPC * 100 (ou / chamadas se CPC = 0)
+          const sucessoNegPct = cpc > 0 ? Math.round((sucessoNeg / cpc) * 100 * 10) / 10 : (chamadas > 0 ? Math.round((sucessoNeg / chamadas) * 100 * 10) / 10 : 0);
+          // % Tempo Logado = Tempo Logado / Jornada padrão (8h = 28800s)
+          const jornadaPadrao = 8 * 3600;
+          const tempoLogadoPct = Math.min(100, Math.round((tempoLogadoSeg / jornadaPadrao) * 100 * 10) / 10);
+
+          // Busca no dimensionamento por nome ou login
+          const nomeKey = (row.agente || "").trim().toUpperCase();
+          const loginKey = `LOGIN:${(row.login || "").trim().toLowerCase()}`;
+          const dim = dimMap[nomeKey] || dimMap[loginKey] || null;
+
+          return {
+            ...row,
+            // Métricas calculadas
+            idleSeg,
+            tmaSeg,
+            cpcPct,
+            sucessoNegPct,
+            tempoLogadoPct,
+            tempoFaladoSeg,
+            // Dados do dimensionamento
+            turno: dim?.turno || "",
+            celula: dim?.celula || "",
+            skill: dim?.skill || "",
+            supervisorDim: dim?.supervisor || "",
+            entradaPrevista: dim?.entrada || "",
+            saidaPrevista: dim?.saida || "",
+          };
+        });
+
+        // Aplica filtros de turno/célula/supervisor (do dimensionamento)
+        let filtered = enriched;
+        if (input.turno) filtered = filtered.filter(r => r.turno === input.turno);
+        if (input.celula) filtered = filtered.filter(r => r.celula === input.celula);
+        if (input.supervisor) filtered = filtered.filter(r => r.supervisorDim === input.supervisor);
+
+        return filtered;
       }),
 
-    // ─── Faixa 2: ReasonAgent ──────────────────────────────────────────────
+    // ─── Faixa 2: TEMPOS (ReasonAgent) ─────────────────────────────────────────
     getReasonAgent: publicProcedure
       .input(z.object({
         sessionIds: z.array(z.number()).optional(),
@@ -129,14 +210,13 @@ export const appRouter = router({
           agente: input.agente,
         });
 
-        // Limites de pausa por tipo (em segundos) — qualquer excesso é improdutivo
-        // Regra: se o tempo da pausa ultrapassar o limite em até 1 min, já é estourado
+        // Limites NR17 (obrigatórios) e outros
         const PAUSE_LIMITS: Record<string, number> = {
-          "descanso 1": 10 * 60,   // 10 min
+          "descanso 1": 10 * 60,
           "descanso 2": 10 * 60,
           "descanso 3": 10 * 60,
-          "lanche": 20 * 60,       // 20 min
-          "banheiro": 10 * 60,     // 10 min
+          "lanche": 20 * 60,
+          "banheiro": 10 * 60,
           "pausa descanso 1": 10 * 60,
           "pausa descanso 2": 10 * 60,
           "pausa descanso 3": 10 * 60,
@@ -152,32 +232,48 @@ export const appRouter = router({
           return null;
         }
 
-        // Classificação de pausas improdutivas:
-        // NÃO improdutivas: Feedback, Erro de Sistema, Atendimento Chat
-        // TODAS as demais são improdutivas por padrão
+        // Classificação por categoria de pausa
+        type PauseCategory = "nr17" | "banheiro" | "feedback" | "outros";
+        function getCategoria(motivo: string): PauseCategory {
+          const m = motivo.toLowerCase().trim();
+          if (m.includes("descanso") || m.includes("lanche") || m.includes("pausa descanso") || m.includes("pausa lanche")) return "nr17";
+          if (m.includes("banheiro")) return "banheiro";
+          if (m.includes("feedback") || m.includes("treinamento") || m.includes("training")) return "feedback";
+          return "outros";
+        }
+
         function isImprodutiva(motivo: string): boolean {
           const m = motivo.toLowerCase().trim();
-          if (m.includes("feedback")) return false;
+          if (m.includes("feedback") || m.includes("treinamento")) return false;
           if (m.includes("erro de sistema") || m.includes("erro sistema") || m === "erro") return false;
           if (m.includes("atendimento chat") || m === "chat") return false;
           return true;
         }
 
-        // Estrutura de agrupamento por agente + motivo (para dashboard de abusadores)
+        // Estruturas de agrupamento
         const byAgenteMotivo: Record<string, {
-          agente: string;
-          motivo: string;
-          totalSegundos: number;
-          totalPausas: number;
-          limiteSegundos: number | null;
-          excedeuLimite: boolean;
-          excedidoSegundos: number; // quanto excedeu o limite
+          agente: string; motivo: string; categoria: PauseCategory;
+          totalSegundos: number; totalPausas: number;
+          limiteSegundos: number | null; excedeuLimite: boolean; excedidoSegundos: number;
         }> = {};
-
-        // Agrupamentos existentes
-        const byMotivo: Record<string, { motivo: string; totalPausas: number; totalSegundos: number; agentes: Set<string>; improdutiva: boolean }> = {};
+        const byMotivo: Record<string, { motivo: string; totalPausas: number; totalSegundos: number; agentes: Set<string>; improdutiva: boolean; categoria: PauseCategory }> = {};
         const byAgenteImprod: Record<string, { agente: string; totalSegundos: number; totalPausas: number; pausasExcedidas: number }> = {};
         const byAgente: Record<string, { agente: string; totalSegundos: number; totalPausas: number }> = {};
+
+        // NR17: por agente + motivo NR17 (para ver quem estourou cada pausa obrigatória)
+        const byAgenteNR17: Record<string, {
+          agente: string; motivo: string; totalSegundos: number; totalPausas: number;
+          limiteSegundos: number; excedeuLimite: boolean; excedidoSegundos: number;
+        }> = {};
+
+        // Banheiro: por agente (tempo total + ocorrências)
+        const byAgenteBanheiro: Record<string, { agente: string; totalSegundos: number; totalPausas: number }> = {};
+
+        // Feedback/Treinamento: por agente
+        const byAgenteFeedback: Record<string, { agente: string; motivo: string; totalSegundos: number; totalPausas: number }> = {};
+
+        // Outros: por agente + motivo (tudo que não é NR17, banheiro, feedback)
+        const byAgenteOutros: Record<string, { agente: string; motivo: string; totalSegundos: number; totalPausas: number }> = {};
 
         for (const row of rows) {
           const motivo = row.motivoDePausa || "Sem motivo";
@@ -185,16 +281,17 @@ export const appRouter = router({
           const pausas = row.pausasTotalizadoPorCampanha || 0;
           const improd = isImprodutiva(motivo);
           const limite = getLimiteSeg(motivo);
-          const excedeu = limite !== null && segundos > limite + 60; // 1 min de tolerância
+          // Regra: 11 min em pausa de 10 min já é estourado (excede o limite sem tolerância)
+          const excedeu = limite !== null && segundos > limite;
           const excedidoSeg = excedeu && limite !== null ? Math.max(0, segundos - limite) : 0;
+          const categoria = getCategoria(motivo);
+          const agente = row.agente || "Desconhecido";
 
           // Por motivo (visão geral)
-          if (!byMotivo[motivo]) byMotivo[motivo] = { motivo, totalPausas: 0, totalSegundos: 0, agentes: new Set(), improdutiva: improd };
+          if (!byMotivo[motivo]) byMotivo[motivo] = { motivo, totalPausas: 0, totalSegundos: 0, agentes: new Set(), improdutiva: improd, categoria };
           byMotivo[motivo].totalPausas += pausas;
           byMotivo[motivo].totalSegundos += segundos;
           if (row.agente) byMotivo[motivo].agentes.add(row.agente);
-
-          const agente = row.agente || "Desconhecido";
 
           // Por agente (geral)
           if (!byAgente[agente]) byAgente[agente] = { agente, totalSegundos: 0, totalPausas: 0 };
@@ -209,22 +306,45 @@ export const appRouter = router({
             if (excedeu) byAgenteImprod[agente].pausasExcedidas += 1;
           }
 
-          // Por agente + motivo (dashboard de abusadores)
+          // Por agente + motivo (abusadores)
           const key = `${agente}||${motivo}`;
           if (!byAgenteMotivo[key]) {
-            byAgenteMotivo[key] = {
-              agente, motivo,
-              totalSegundos: 0, totalPausas: 0,
-              limiteSegundos: limite,
-              excedeuLimite: false,
-              excedidoSegundos: 0,
-            };
+            byAgenteMotivo[key] = { agente, motivo, categoria, totalSegundos: 0, totalPausas: 0, limiteSegundos: limite, excedeuLimite: false, excedidoSegundos: 0 };
           }
           byAgenteMotivo[key].totalSegundos += segundos;
           byAgenteMotivo[key].totalPausas += pausas;
-          if (excedeu) {
-            byAgenteMotivo[key].excedeuLimite = true;
-            byAgenteMotivo[key].excedidoSegundos += excedidoSeg;
+          if (excedeu) { byAgenteMotivo[key].excedeuLimite = true; byAgenteMotivo[key].excedidoSegundos += excedidoSeg; }
+
+          // NR17
+          if (categoria === "nr17" && limite !== null) {
+            const nr17Key = `${agente}||${motivo}`;
+            if (!byAgenteNR17[nr17Key]) byAgenteNR17[nr17Key] = { agente, motivo, totalSegundos: 0, totalPausas: 0, limiteSegundos: limite, excedeuLimite: false, excedidoSegundos: 0 };
+            byAgenteNR17[nr17Key].totalSegundos += segundos;
+            byAgenteNR17[nr17Key].totalPausas += pausas;
+            if (excedeu) { byAgenteNR17[nr17Key].excedeuLimite = true; byAgenteNR17[nr17Key].excedidoSegundos += excedidoSeg; }
+          }
+
+          // Banheiro
+          if (categoria === "banheiro") {
+            if (!byAgenteBanheiro[agente]) byAgenteBanheiro[agente] = { agente, totalSegundos: 0, totalPausas: 0 };
+            byAgenteBanheiro[agente].totalSegundos += segundos;
+            byAgenteBanheiro[agente].totalPausas += pausas;
+          }
+
+          // Feedback/Treinamento
+          if (categoria === "feedback") {
+            const fbKey = `${agente}||${motivo}`;
+            if (!byAgenteFeedback[fbKey]) byAgenteFeedback[fbKey] = { agente, motivo, totalSegundos: 0, totalPausas: 0 };
+            byAgenteFeedback[fbKey].totalSegundos += segundos;
+            byAgenteFeedback[fbKey].totalPausas += pausas;
+          }
+
+          // Outros
+          if (categoria === "outros") {
+            const outKey = `${agente}||${motivo}`;
+            if (!byAgenteOutros[outKey]) byAgenteOutros[outKey] = { agente, motivo, totalSegundos: 0, totalPausas: 0 };
+            byAgenteOutros[outKey].totalSegundos += segundos;
+            byAgenteOutros[outKey].totalPausas += pausas;
           }
         }
 
@@ -245,18 +365,55 @@ export const appRouter = router({
           .sort((a, b) => b.totalSegundos - a.totalSegundos)
           .slice(0, 20);
 
-        // Dashboard de abusadores: agentes que excederam limite em algum motivo
         const abusadoresPausa = Object.values(byAgenteMotivo)
           .filter(r => r.excedeuLimite)
           .sort((a, b) => b.excedidoSegundos - a.excedidoSegundos)
           .slice(0, 30);
 
-        // Limites de pausa para exibir no frontend
+        // NR17: quem estourou pausas obrigatórias
+        const nr17Abusadores = Object.values(byAgenteNR17)
+          .filter(r => r.excedeuLimite)
+          .sort((a, b) => b.excedidoSegundos - a.excedidoSegundos);
+
+        // NR17: todos (incluindo quem não estourou, para visão completa)
+        const nr17Todos = Object.values(byAgenteNR17)
+          .sort((a, b) => b.totalSegundos - a.totalSegundos);
+
+        // Banheiro: ranking por tempo total
+        const banheiroRanking = Object.values(byAgenteBanheiro)
+          .sort((a, b) => b.totalSegundos - a.totalSegundos)
+          .slice(0, 20);
+
+        // Feedback/Treinamento: ranking
+        const feedbackRanking = Object.values(byAgenteFeedback)
+          .sort((a, b) => b.totalSegundos - a.totalSegundos)
+          .slice(0, 20);
+
+        // Outros: ranking por agente + motivo
+        const outrosRanking = Object.values(byAgenteOutros)
+          .sort((a, b) => b.totalSegundos - a.totalSegundos)
+          .slice(0, 30);
+
+        // Motivos únicos da categoria "outros" para filtro
+        const outrosMotivos = Array.from(new Set(Object.values(byAgenteOutros).map(r => r.motivo))).sort();
+
+        // % pausa total por agente: totalPausas / tempoLogado (precisa cruzar com AgentDay)
+        // Retornamos o total de segundos por agente para o frontend calcular
+        const pausaTotalPorAgente = Object.values(byAgente)
+          .sort((a, b) => b.totalSegundos - a.totalSegundos)
+          .slice(0, 30);
+
         const pausaLimites = Object.entries(PAUSE_LIMITS).map(([motivo, seg]) => ({
           motivo, limiteMin: Math.round(seg / 60)
         }));
 
-        return { rows, motivoChart, motivoImprodChart, agenteRanking, agenteRankingGeral, abusadoresPausa, pausaLimites };
+        return {
+          rows, motivoChart, motivoImprodChart, agenteRanking, agenteRankingGeral,
+          abusadoresPausa, pausaLimites,
+          nr17Abusadores, nr17Todos,
+          banheiroRanking, feedbackRanking, outrosRanking, outrosMotivos,
+          pausaTotalPorAgente,
+        };
       }),
 
     // ─── Faixa 3: CampaignAgent ────────────────────────────────────────────

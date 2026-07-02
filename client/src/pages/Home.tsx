@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { id: "upload", label: "Importar Dados", icon: Upload, badge: null, color: "text-orange-400" },
   { id: "agentday", label: "Performance em Tempo Real", icon: Activity, badge: "AgentDay", color: "text-orange-400" },
-  { id: "reasonagent", label: "Controle de Pausas", icon: PauseCircle, badge: "ReasonAgent", color: "text-blue-400" },
+  { id: "reasonagent", label: "TEMPOS", icon: PauseCircle, badge: "ReasonAgent", color: "text-blue-400" },
   { id: "campaignagent", label: "Performance por Célula/Campanha", icon: BarChart3, badge: "CampaignAgent", color: "text-emerald-400" },
   { id: "dispositionagent", label: "Tabulações Excedidas", icon: AlertTriangle, badge: "DispositionAgent", color: "text-red-400" },
 ];
