@@ -233,7 +233,7 @@ export default function ReasonAgentPage() {
                   </SelectItem>
                 ))}
                 {(!availableDates || availableDates.length === 0) && (
-                  <SelectItem value="" disabled className="text-xs text-muted-foreground">
+                  <SelectItem value="__empty__" disabled className="text-xs text-muted-foreground">
                     Nenhum histórico
                   </SelectItem>
                 )}
