@@ -53,8 +53,9 @@ export async function getUserByOpenId(openId: string) {
 // ─── Upload Sessions ───────────────────────────────────────────────────────────
 
 /**
- * Cria nova sessão de upload e apaga sessões antigas do mesmo tipo.
- * Comportamento "relatório diário": cada importação substitui a anterior do mesmo tipo.
+ * Cria nova sessão de upload com comportamento acumulativo por data.
+ * Se já existir uma sessão do mesmo tipo + mesma referenceDate, substitui apenas essa.
+ * Sessões de outras datas são preservadas (histórico).
  * Retorna o ID da nova sessão.
  */
 export async function createUploadSession(data: {
@@ -68,15 +69,29 @@ export async function createUploadSession(data: {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  // 1. Buscar sessões antigas do mesmo tipo para deletar dados
-  const oldSessions = await db
-    .select({ id: uploadSessions.id })
-    .from(uploadSessions)
-    .where(eq(uploadSessions.reportType, data.reportType));
+  // Buscar sessões do mesmo tipo + mesma data de referência para substituir
+  // Se não há referenceDate, substitui todas do tipo (comportamento legado)
+  let oldSessions: { id: number }[] = [];
+  if (data.referenceDate) {
+    oldSessions = await db
+      .select({ id: uploadSessions.id })
+      .from(uploadSessions)
+      .where(
+        and(
+          eq(uploadSessions.reportType, data.reportType),
+          eq(uploadSessions.referenceDate, data.referenceDate)
+        )
+      );
+  } else {
+    // Sem data de referência: substitui todas do tipo (compat. legado)
+    oldSessions = await db
+      .select({ id: uploadSessions.id })
+      .from(uploadSessions)
+      .where(eq(uploadSessions.reportType, data.reportType));
+  }
 
   if (oldSessions.length > 0) {
     const oldIds = oldSessions.map(s => s.id);
-    // Deletar registros antigos do tipo correspondente
     switch (data.reportType) {
       case "AgentDay":
         await db.delete(agentDayRecords).where(inArray(agentDayRecords.sessionId, oldIds));
@@ -91,11 +106,9 @@ export async function createUploadSession(data: {
         await db.delete(dispositionAgentRecords).where(inArray(dispositionAgentRecords.sessionId, oldIds));
         break;
     }
-    // Deletar sessões antigas
     await db.delete(uploadSessions).where(inArray(uploadSessions.id, oldIds));
   }
 
-  // 2. Criar nova sessão
   const [result] = await db.insert(uploadSessions).values(data).$returningId();
   return result;
 }

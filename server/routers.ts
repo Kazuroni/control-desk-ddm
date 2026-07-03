@@ -204,14 +204,34 @@ export const appRouter = router({
       }),
 
     // ─── Faixa 2: TEMPOS (ReasonAgent) ─────────────────────────────────────────
+    // Retorna as datas disponíveis para um tipo de relatório (histórico)
+    getAvailableDates: publicProcedure
+      .input(z.object({ reportType: z.enum(["AgentDay", "ReasonAgent", "CampaignAgent", "DispositionAgent"]) }))
+      .query(async ({ input }) => {
+        const sessions = await getUploadSessions(input.reportType);
+        // Retorna datas únicas ordenadas do mais recente para o mais antigo
+        const dates = Array.from(
+          new Set(sessions.map(s => s.referenceDate).filter(Boolean))
+        ).sort((a, b) => (b || "").localeCompare(a || ""));
+        return dates as string[];
+      }),
+
     getReasonAgent: publicProcedure
       .input(z.object({
         sessionIds: z.array(z.number()).optional(),
         agente: z.string().optional(),
+        referenceDate: z.string().optional(), // filtro de data para histórico
       }))
       .query(async ({ input }) => {
+        // Se referenceDate fornecida, busca sessionIds da data específica
+        let sessionIds = input.sessionIds;
+        if (input.referenceDate && !sessionIds) {
+          const sessions = await getUploadSessions("ReasonAgent");
+          const sessionsForDate = sessions.filter(s => s.referenceDate === input.referenceDate);
+          sessionIds = sessionsForDate.map(s => s.id);
+        }
         const rows = await getReasonAgentRecords({
-          sessionIds: input.sessionIds,
+          sessionIds,
           agente: input.agente,
         });
 

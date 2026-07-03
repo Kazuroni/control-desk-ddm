@@ -1,11 +1,11 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useDashboard } from "@/contexts/DashboardContext";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LabelList
 } from "recharts";
-import { Download, Clock, AlertTriangle, Info, Flame, Filter, Activity, Coffee, BookOpen, MoreHorizontal, Shield } from "lucide-react";
+import { Download, Clock, AlertTriangle, Info, Flame, Filter, Activity, Coffee, BookOpen, MoreHorizontal, Shield, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -58,10 +58,29 @@ export default function ReasonAgentPage() {
   const [filtroNR17Motivo, setFiltroNR17Motivo] = useState<string>("all");
   const [filtroNR17Agente, setFiltroNR17Agente] = useState<string>("");
   const [filtroBanheiroAgente, setFiltroBanheiroAgente] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  // Busca datas disponíveis no histórico
+  const { data: availableDates } = trpc.dashboard.getAvailableDates.useQuery(
+    { reportType: "ReasonAgent" },
+    { refetchOnWindowFocus: false }
+  );
+
+  // Quando as datas carregam, seleciona a mais recente automaticamente
+  useEffect(() => {
+    if (availableDates && availableDates.length > 0 && selectedDate === null) {
+      setSelectedDate(availableDates[0]);
+    }
+  }, [availableDates, selectedDate]);
+
+  const currentDateIndex = selectedDate && availableDates ? availableDates.indexOf(selectedDate) : 0;
+  const canGoPrev = availableDates ? currentDateIndex < availableDates.length - 1 : false;
+  const canGoNext = currentDateIndex > 0;
 
   const { data, isLoading } = trpc.dashboard.getReasonAgent.useQuery({
     sessionIds: filters.sessionIds.length > 0 ? filters.sessionIds : undefined,
     agente: filters.agente || undefined,
+    referenceDate: selectedDate || undefined,
   });
 
   const motivoChart = data?.motivoChart ?? [];
@@ -186,12 +205,63 @@ export default function ReasonAgentPage() {
             Controle de pausas, NR17, banheiro, feedback e outros · {(data?.rows ?? []).length} registros
           </p>
         </div>
-        <Button
-          onClick={() => exportPng(exportRef, `tempos-${new Date().toISOString().slice(0, 10)}.png`)}
-          variant="outline" size="sm" className="gap-2"
-        >
-          <Download className="w-4 h-4" /> Exportar PNG
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Seletor de data histórica */}
+          <div className="flex items-center gap-1 bg-card border border-border rounded-lg px-2 py-1">
+            <Calendar className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+            <button
+              onClick={() => {
+                if (canGoPrev && availableDates) setSelectedDate(availableDates[currentDateIndex + 1]);
+              }}
+              disabled={!canGoPrev}
+              className="p-0.5 rounded hover:bg-muted disabled:opacity-30 transition-colors"
+              title="Dia anterior"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <Select
+              value={selectedDate || ""}
+              onValueChange={(v) => setSelectedDate(v)}
+            >
+              <SelectTrigger className="border-0 bg-transparent h-7 text-xs font-medium min-w-[110px] focus:ring-0 px-1">
+                <SelectValue placeholder="Selecionar data" />
+              </SelectTrigger>
+              <SelectContent>
+                {(availableDates ?? []).map((d: string) => (
+                  <SelectItem key={d} value={d} className="text-xs">
+                    {d}
+                  </SelectItem>
+                ))}
+                {(!availableDates || availableDates.length === 0) && (
+                  <SelectItem value="" disabled className="text-xs text-muted-foreground">
+                    Nenhum histórico
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            <button
+              onClick={() => {
+                if (canGoNext && availableDates) setSelectedDate(availableDates[currentDateIndex - 1]);
+              }}
+              disabled={!canGoNext}
+              className="p-0.5 rounded hover:bg-muted disabled:opacity-30 transition-colors"
+              title="Próximo dia"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {availableDates && availableDates.length > 1 && (
+            <Badge variant="outline" className="text-xs text-muted-foreground">
+              {availableDates.length} dias no histórico
+            </Badge>
+          )}
+          <Button
+            onClick={() => exportPng(exportRef, `tempos-${selectedDate || new Date().toISOString().slice(0, 10)}.png`)}
+            variant="outline" size="sm" className="gap-2"
+          >
+            <Download className="w-4 h-4" /> Exportar PNG
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="visao-geral">
