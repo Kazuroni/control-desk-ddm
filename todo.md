@@ -128,3 +128,11 @@
 - [x] Tabulações Excedidas: aba "Ranking Unificado" com agente+tabulação, filtro dinâmico por tabulação
 - [x] Tabulações Excedidas: filtro por supervisor mantido em todas as abas
 - [x] Tabulações Excedidas: campo tabulacao adicionado ao retorno do backend (agenteTabRanking)
+
+## Importação de Excel no Dimensionamento (03/07/2026)
+- [x] Rota Express POST /api/upload-dimensionamento para receber arquivo .xlsx via multipart
+- [x] Lógica de upsert: atualiza se login/nome já existe, insere se novo
+- [x] Componente ImportDimensionamentoDialog com drag-and-drop e feedback de progresso
+- [x] Botão 'Importar Excel' na tela de Dimensionamento
+- [x] Exibir resumo pós-importação: X inseridos, Y atualizados, Z ignorados
+

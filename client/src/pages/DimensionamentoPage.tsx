@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Users, Search, Plus, Pencil, Trash2, Download, FileSpreadsheet,
-  Image, Filter, Building2, Clock, MapPin, ChevronDown, ChevronUp, X
+  Image, Filter, Building2, Clock, MapPin, ChevronDown, ChevronUp, X,
+  Upload, CheckCircle2, AlertCircle, Loader2
 } from "lucide-react";
 import { toPng } from "html-to-image";
 import * as XLSX from "xlsx";
@@ -62,6 +63,10 @@ export default function DimensionamentoPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<typeof EMPTY_FORM>({ ...EMPTY_FORM });
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ inserted: number; updated: number; skipped: number; errors: string[]; sheetName: string; totalRows: number } | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
 
   const utils = trpc.useUtils();
@@ -209,6 +214,35 @@ export default function DimensionamentoPage() {
     }
   }
 
+  // Importar Excel
+  const handleImportFile = useCallback(async (file: File) => {
+    if (!file) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload-dimensionamento", { method: "POST", body: formData });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Erro desconhecido");
+      setImportResult(json);
+      utils.dimensionamento.list.invalidate();
+      utils.dimensionamento.stats.invalidate();
+      toast.success(`Importação concluída: ${json.inserted} inseridos, ${json.updated} atualizados`);
+    } catch (e: any) {
+      toast.error("Erro na importação: " + e.message);
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
+  }, [utils]);
+
+  const handleImportDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) handleImportFile(file);
+  }, [handleImportFile]);
+
   const celulas = stats?.celulas || [];
   const supervisores = stats?.supervisores || [];
   const turnos = ["MANHÃ", "TARDE", "INTEGRAL"];
@@ -233,6 +267,14 @@ export default function DimensionamentoPage() {
           </Button>
           <Button variant="outline" size="sm" onClick={exportPng} className="border-gray-700 text-gray-300 hover:text-white">
             <Image className="w-4 h-4 mr-1" /> PNG
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => { setImportResult(null); setImportDialogOpen(true); }}
+            className="border-orange-500/50 text-orange-300 hover:bg-orange-500/10 hover:text-orange-200 gap-1"
+          >
+            <Upload className="w-4 h-4" /> Importar Excel
           </Button>
           <Button size="sm" onClick={openCreate} className="bg-orange-500 hover:bg-orange-600 text-white">
             <Plus className="w-4 h-4 mr-1" /> Novo Operador
@@ -659,6 +701,101 @@ export default function DimensionamentoPage() {
               className="bg-orange-500 hover:bg-orange-600 text-white"
             >
               {createMutation.isPending || updateMutation.isPending ? "Salvando..." : editingId ? "Salvar Alterações" : "Adicionar Operador"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Excel Dialog */}
+      <Dialog open={importDialogOpen} onOpenChange={v => { if (!importing) setImportDialogOpen(v); }}>
+        <DialogContent className="max-w-lg bg-gray-950 border-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Upload className="w-5 h-5 text-orange-400" />
+              Importar Dimensionamento via Excel
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-400">
+              Selecione ou arraste um arquivo <strong className="text-white">.xlsx</strong>.
+              A planilha deve conter a aba <strong className="text-white">BaseQuadro</strong> com as colunas padrão.
+              Operadores existentes serão <strong className="text-orange-300">atualizados</strong>, novos serão <strong className="text-green-300">inseridos</strong>.
+            </p>
+            <div
+              className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer ${
+                importing ? "border-orange-500/50 bg-orange-500/5" : "border-gray-700 hover:border-orange-500/60 hover:bg-orange-500/5"
+              }`}
+              onDragOver={e => e.preventDefault()}
+              onDrop={handleImportDrop}
+              onClick={() => !importing && importInputRef.current?.click()}
+            >
+              {importing ? (
+                <div className="flex flex-col items-center gap-2 text-orange-400">
+                  <Loader2 className="w-8 h-8 animate-spin" />
+                  <p className="text-sm font-medium">Processando arquivo...</p>
+                  <p className="text-xs text-gray-500">Aguarde enquanto os dados são importados</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2 text-gray-400">
+                  <FileSpreadsheet className="w-10 h-10 text-orange-400/60" />
+                  <p className="text-sm font-medium text-gray-300">Arraste o arquivo aqui</p>
+                  <p className="text-xs">ou clique para selecionar</p>
+                  <p className="text-[11px] text-gray-600 mt-1">.xlsx — máx. 20 MB</p>
+                </div>
+              )}
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
+              />
+            </div>
+            {importResult && (
+              <div className="rounded-xl border border-gray-800 bg-gray-900 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-green-400">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span className="text-sm font-semibold">Importação concluída</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center">
+                    <p className="text-xl font-bold text-green-400">{importResult.inserted}</p>
+                    <p className="text-[11px] text-gray-500">Inseridos</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xl font-bold text-blue-400">{importResult.updated}</p>
+                    <p className="text-[11px] text-gray-500">Atualizados</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xl font-bold text-gray-400">{importResult.skipped}</p>
+                    <p className="text-[11px] text-gray-500">Ignorados</p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-gray-600">Aba: <strong className="text-gray-400">{importResult.sheetName}</strong> · {importResult.totalRows} linhas processadas</p>
+                {importResult.errors.length > 0 && (
+                  <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3">
+                    <div className="flex items-center gap-1.5 text-red-400 mb-2">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      <span className="text-xs font-semibold">{importResult.errors.length} erro(s)</span>
+                    </div>
+                    <ul className="space-y-1">
+                      {importResult.errors.map((err, i) => (
+                        <li key={i} className="text-[11px] text-red-300/80">{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setImportDialogOpen(false)}
+              disabled={importing}
+              className="border-gray-700 text-gray-300"
+            >
+              {importResult ? "Fechar" : "Cancelar"}
             </Button>
           </DialogFooter>
         </DialogContent>
