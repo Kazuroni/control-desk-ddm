@@ -433,7 +433,14 @@ export default function AgentDayPage() {
                             {/* Agente */}
                             <td className="px-3 py-2.5 min-w-[140px]">
                               <div>
-                                <p className="text-sm font-medium text-foreground leading-tight">{row.agente}</p>
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-sm font-medium text-foreground leading-tight">{row.agente}</p>
+                                  {r.noDimensionamento === false && (
+                                    <span title="Agente não encontrado no dimensionamento" className="text-[9px] px-1.5 py-0 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 font-semibold uppercase tracking-wide shrink-0">
+                                      Pendente
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="flex items-center gap-1.5 mt-0.5">
                                   <p className="text-xs text-muted-foreground">{row.login}</p>
                                   {r.turno && <span className="text-[10px] px-1 py-0 rounded bg-primary/10 text-primary font-mono">{r.turno}</span>}

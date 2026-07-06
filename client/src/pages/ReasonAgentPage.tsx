@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
+import NR17ReportModal from "@/components/NR17ReportModal";
 
 const COLORS_IMPROD = ["#f97316", "#ef4444", "#f59e0b", "#eab308", "#fb923c"];
 const COLORS_GERAL = [
@@ -65,6 +66,7 @@ export default function ReasonAgentPage() {
   const [filtroNR17Motivo, setFiltroNR17Motivo] = useState<string>("all");
   const [filtroNR17Agente, setFiltroNR17Agente] = useState<string>("");
   const [filtroBanheiroAgente, setFiltroBanheiroAgente] = useState<string>("");
+  const [showNR17Report, setShowNR17Report] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const activeRef = useMemo(() => ({
@@ -401,6 +403,16 @@ export default function ReasonAgentPage() {
         {/* ── NR17 ── */}
         <TabsContent value="nr17" className="space-y-5 mt-4">
           <div ref={refNR17Tab} className="space-y-5">
+          {/* Botão Relatório NR17 */}
+          <div className="flex justify-end">
+            <Button
+              onClick={() => setShowNR17Report(true)}
+              size="sm"
+              className="gap-2 bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs"
+            >
+              <Shield className="w-3.5 h-3.5" /> Relatório NR17 Top 10
+            </Button>
+          </div>
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex gap-3">
             <Shield className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
             <div>
@@ -816,6 +828,15 @@ export default function ReasonAgentPage() {
           </div>{/* /refAbusadoresTab */}
         </TabsContent>
       </Tabs>
+
+      {/* Modal Relatório NR17 */}
+      <NR17ReportModal
+        open={showNR17Report}
+        onClose={() => setShowNR17Report(false)}
+        nr17Abusadores={data?.nr17Abusadores ?? []}
+        nr17Todos={data?.nr17Todos ?? []}
+        selectedDate={selectedDate}
+      />
     </div>
   );
 }

@@ -191,6 +191,8 @@ export const appRouter = router({
             supervisorDim: dim?.supervisor || "",
             entradaPrevista: dim?.entrada || "",
             saidaPrevista: dim?.saida || "",
+            // Flag: agente não encontrado no dimensionamento
+            noDimensionamento: dim !== null,
           };
         });
 
@@ -714,11 +716,14 @@ export const appRouter = router({
           }));
 
         // ── Faixa 4: Top 5 por tabulações excedidas ────────────────────────────
-        const byAgenteDisp: Record<string, { agente: string; ocorrencias: number; supervisor: string }> = {};
+        // Agrega por agente com mesma lógica do getDispositionAgent
+        const byAgenteDisp: Record<string, { agente: string; ocorrencias: number; totalSegundos: number; supervisor: string }> = {};
         for (const row of dispositionRows) {
           const agente = row.agente || "Desconhecido";
-          if (!byAgenteDisp[agente]) byAgenteDisp[agente] = { agente, ocorrencias: 0, supervisor: row.nomeSupervisor || "" };
+          const seg = timeToSeconds(row.tempoTabulacao);
+          if (!byAgenteDisp[agente]) byAgenteDisp[agente] = { agente, ocorrencias: 0, totalSegundos: 0, supervisor: row.nomeSupervisor || "" };
           byAgenteDisp[agente].ocorrencias += 1;
+          byAgenteDisp[agente].totalSegundos += seg;
         }
         const top5Tabulacoes = Object.values(byAgenteDisp)
           .sort((a, b) => b.ocorrencias - a.ocorrencias)
