@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useDashboard } from "@/contexts/DashboardContext";
 import { toPng } from "html-to-image";
+import jsPDF from "jspdf";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -164,6 +165,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
   const exportRefAcordo = useRef<HTMLDivElement>(null);
   const exportRefAtendida = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState<"png" | "pdf">("png");
 
   const { data, isLoading, isError } = trpc.dashboard.getExecutiveReport.useQuery(
     { sessionIds: filters.sessionIds.length > 0 ? filters.sessionIds : undefined },
@@ -221,18 +223,23 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
     Q4: { color: "text-red-400",     bg: "bg-red-500/10",     border: "border-red-500/30" },
   };
 
+  async function capturePng(ref: React.RefObject<HTMLDivElement | null>): Promise<string> {
+    if (!ref.current) throw new Error("Ref vazio");
+    return toPng(ref.current, {
+      backgroundColor: "#0f1117",
+      pixelRatio: 2.5,
+      skipFonts: true,
+      cacheBust: true,
+      style: { borderRadius: "0" },
+    });
+  }
+
   async function handleExport(ref: React.RefObject<HTMLDivElement | null>, filename: string) {
     if (!ref.current) { toast.error("Nada para exportar"); return; }
     setExporting(true);
     toast.info("Gerando relatório...");
     try {
-      const url = await toPng(ref.current, {
-        backgroundColor: "#0f1117",
-        pixelRatio: 2.5,
-        skipFonts: true,
-        cacheBust: true,
-        style: { borderRadius: "0" },
-      });
+      const url = await capturePng(ref);
       const a = document.createElement("a");
       a.href = url;
       a.download = `${filename}-${new Date().toISOString().slice(0, 10)}.png`;
@@ -240,6 +247,61 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
       toast.success("Relatório exportado!");
     } catch {
       toast.error("Erro ao exportar. Tente novamente.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleExportConsolidadoPDF() {
+    if (!exportRefConsolidado.current) { toast.error("Nada para exportar"); return; }
+    setExporting(true);
+    toast.info("Gerando PDF completo...");
+    try {
+      const url = await capturePng(exportRefConsolidado);
+      const img = new Image();
+      await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; img.src = url; });
+      const pageW = 297; // A4 landscape mm
+      const pageH = 210;
+      const imgW = img.naturalWidth;
+      const imgH = img.naturalHeight;
+      const ratio = imgW / imgH;
+      const pdfImgW = pageW;
+      const pdfImgH = pdfImgW / ratio;
+      const pdf = new jsPDF({ orientation: pdfImgH > pageH ? "portrait" : "landscape", unit: "mm", format: "a4" });
+      const usedW = pdf.internal.pageSize.getWidth();
+      const usedH = (usedW / ratio);
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      if (usedH <= pageHeight) {
+        pdf.addImage(url, "PNG", 0, 0, usedW, usedH);
+      } else {
+        // Multi-page: slice image into pages
+        const canvas = document.createElement("canvas");
+        canvas.width = imgW;
+        canvas.height = imgH;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0);
+        const sliceH = Math.floor(imgH * (pageHeight / usedH));
+        let srcY = 0;
+        let firstPage = true;
+        while (srcY < imgH) {
+          const sliceCanvas = document.createElement("canvas");
+          sliceCanvas.width = imgW;
+          sliceCanvas.height = Math.min(sliceH, imgH - srcY);
+          const sCtx = sliceCanvas.getContext("2d")!;
+          sCtx.drawImage(canvas, 0, srcY, imgW, sliceCanvas.height, 0, 0, imgW, sliceCanvas.height);
+          const sliceUrl = sliceCanvas.toDataURL("image/png");
+          const sliceImgH = (sliceCanvas.height / imgH) * usedH;
+          if (!firstPage) pdf.addPage();
+          pdf.addImage(sliceUrl, "PNG", 0, 0, usedW, sliceImgH);
+          srcY += sliceH;
+          firstPage = false;
+        }
+      }
+      pdf.save(`relatorio-executivo-${new Date().toISOString().slice(0, 10)}.pdf`);
+      toast.success("PDF exportado!");
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao gerar PDF. Tente novamente.");
     } finally {
       setExporting(false);
     }
@@ -282,15 +344,25 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
 
           {/* ─── ABA CONSOLIDADO ──────────────────────────────────────────── */}
           <TabsContent value="consolidado" className="m-0">
-            <div className="flex justify-end px-5 pt-3">
+            <div className="flex justify-end gap-2 px-5 pt-3">
               <Button
                 onClick={() => handleExport(exportRefConsolidado, "relatorio-executivo")}
+                disabled={!isReady || exporting}
+                size="sm"
+                variant="outline"
+                className="gap-2 border-primary/40 text-primary hover:bg-primary/10 text-xs"
+              >
+                <Download className="w-3.5 h-3.5" />
+                {exporting ? "Gerando..." : "Exportar PNG"}
+              </Button>
+              <Button
+                onClick={handleExportConsolidadoPDF}
                 disabled={!isReady || exporting}
                 size="sm"
                 className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs"
               >
                 <Download className="w-3.5 h-3.5" />
-                {exporting ? "Gerando..." : "Exportar PNG"}
+                {exporting ? "Gerando..." : "Exportar PDF"}
               </Button>
             </div>
             <ExportSection exportRef={exportRefConsolidado} today={today}>
