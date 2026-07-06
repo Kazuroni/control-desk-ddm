@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Download, TrendingUp, TrendingDown, PauseCircle,
-  BarChart3, AlertTriangle, Trophy, Target, Handshake, Phone
+  BarChart3, Trophy, Target, AlertTriangle, Eye,
 } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -49,6 +49,7 @@ const VARIANTS = {
   blue:   { border: "border-blue-500/30",   header: "bg-blue-500/10",   icon: "text-blue-400",   badge: "bg-blue-500/15 text-blue-300",   bar: "bg-blue-500",   num1: "text-blue-300" },
   violet: { border: "border-violet-500/30", header: "bg-violet-500/10", icon: "text-violet-400", badge: "bg-violet-500/15 text-violet-300", bar: "bg-violet-500", num1: "text-violet-300" },
   emerald:{ border: "border-emerald-500/30",header: "bg-emerald-500/10",icon: "text-emerald-400",badge: "bg-emerald-500/15 text-emerald-300",bar: "bg-emerald-500",num1: "text-emerald-300" },
+  rose:   { border: "border-rose-500/30",   header: "bg-rose-500/10",   icon: "text-rose-400",   badge: "bg-rose-500/15 text-rose-300",   bar: "bg-rose-500",   num1: "text-rose-300" },
 };
 
 // Card de ranking com tipografia grande para exportação legível em 1920×1080
@@ -63,7 +64,6 @@ function RankingCard({
   const maxVal = Math.max(...items.map(i => i.valor), 1);
   return (
     <div className={`rounded-2xl border ${s.border} overflow-hidden flex flex-col`}>
-      {/* Header do card */}
       <div className={`${s.header} px-6 py-4 flex items-center gap-3 shrink-0`}>
         <span className={`${s.icon} w-6 h-6`}>{icon}</span>
         <div className="min-w-0 flex-1">
@@ -71,7 +71,6 @@ function RankingCard({
           <p className="text-xs text-white/45 leading-tight mt-1">{subtitle}</p>
         </div>
       </div>
-      {/* Itens */}
       <div className="px-6 py-4 space-y-4 bg-[#0f1117] flex-1">
         {items.length === 0 ? (
           <p className="text-sm text-white/25 text-center py-4">Sem dados disponíveis</p>
@@ -85,7 +84,6 @@ function RankingCard({
                   {idx + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  {/* Nome completo — sem truncate */}
                   <p className="text-base text-white font-semibold leading-snug break-words">{item.agente}</p>
                   <div className="flex items-center justify-between mt-1 gap-2 flex-wrap">
                     <span className={`text-xs px-2.5 py-1 rounded-lg font-medium leading-snug ${s.badge}`}
@@ -96,7 +94,6 @@ function RankingCard({
                   </div>
                 </div>
               </div>
-              {/* Barra de progresso */}
               <div className="h-1.5 bg-white/5 rounded-full overflow-hidden ml-10">
                 <div className={`h-full ${s.bar} rounded-full transition-all`} style={{ width: `${pct}%` }} />
               </div>
@@ -313,7 +310,6 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
       backgroundColor: "#0f1117",
       pixelRatio: 2,
       skipFonts: true,
-      cacheBust: true,
       width: el.scrollWidth,
       height: el.scrollHeight,
       style: { borderRadius: "0" },
@@ -396,7 +392,8 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="w-[99vw] max-w-[1600px] max-h-[96vh] overflow-y-auto p-0 gap-0 bg-[#0f1117] border-border">
+      {/* Tela cheia — ocupa toda a viewport */}
+      <DialogContent className="!max-w-none !w-screen !h-screen !max-h-screen !rounded-none overflow-hidden p-0 gap-0 bg-[#0f1117] border-0 flex flex-col">
         {/* Toolbar */}
         <DialogHeader className="flex flex-row items-center justify-between px-6 py-4 border-b border-border shrink-0 bg-[#0f1117]">
           <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
@@ -405,8 +402,8 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="consolidado" className="flex-1">
-          <div className="px-6 pt-3 border-b border-border bg-[#0f1117] flex items-center justify-between gap-4">
+        <Tabs defaultValue="consolidado" className="flex flex-col flex-1 overflow-hidden">
+          <div className="px-6 pt-3 pb-0 border-b border-border bg-[#0f1117] shrink-0 flex items-center justify-between gap-4">
             <TabsList className="bg-gray-900 border border-gray-800">
               <TabsTrigger value="consolidado" className="data-[state=active]:bg-primary data-[state=active]:text-white text-sm px-4">
                 Consolidado
@@ -424,7 +421,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
           </div>
 
           {/* ─── ABA CONSOLIDADO ──────────────────────────────────────────── */}
-          <TabsContent value="consolidado" className="m-0">
+          <TabsContent value="consolidado" className="m-0 flex-1 overflow-y-auto">
             <div className="flex justify-end gap-2 px-6 pt-4">
               <Button
                 onClick={() => handleExport(exportRefConsolidado, "relatorio-executivo")}
@@ -452,7 +449,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
               <ExportSection exportRef={exportRefConsolidado} today={today}>
                 {isLoading ? (
                   <div className="grid grid-cols-2 gap-8">
-                    {Array.from({ length: 5 }).map((_, i) => (
+                    {Array.from({ length: 6 }).map((_, i) => (
                       <Skeleton key={i} className="h-64 rounded-2xl bg-white/5" />
                     ))}
                   </div>
@@ -462,7 +459,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                   </div>
                 ) : (
                   <>
-                    {/* Linha 1 — Performance */}
+                    {/* Linha 1 — Performance: Melhores + Baixa Produtividade */}
                     <div className="mb-8">
                       <p className="text-xs font-semibold text-white/25 uppercase tracking-widest mb-4">
                         ① Performance em Tempo Real — Chamadas Atendidas
@@ -477,8 +474,8 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                           formatValue={v => `${v.toLocaleString("pt-BR")} ch.`}
                         />
                         <RankingCard
-                          title="⚠️ Top 5 Menor Produção"
-                          subtitle="Menor volume — requer atenção do supervisor"
+                          title="⚠️ Top 5 — Esforço Sem Resultado"
+                          subtitle="Muitas chamadas mas poucos CPC e acordos — requer atenção"
                           items={data?.bottom5Chamadas ?? []}
                           variant="red"
                           icon={<TrendingDown className="w-5 h-5" />}
@@ -487,12 +484,20 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                       </div>
                     </div>
 
-                    {/* Linha 2 — Pausas + Campanhas */}
+                    {/* Linha 2 — Suspeitos + Pausas */}
                     <div className="mb-8">
                       <p className="text-xs font-semibold text-white/25 uppercase tracking-widest mb-4">
-                        ② Pausas Improdutivas · ③ Campanhas
+                        ② Análise de Conversão · ③ Pausas Improdutivas
                       </p>
                       <div className="grid grid-cols-2 gap-6">
+                        <RankingCard
+                          title="🔍 Top 5 Suspeitos — Alto CPC, Baixo Acordo"
+                          subtitle="Muitos contatos efetivos mas poucos acordos fechados — conversão suspeita"
+                          items={data?.top5Suspeitos ?? []}
+                          variant="rose"
+                          icon={<Eye className="w-5 h-5" />}
+                          formatValue={v => `${v} CPC`}
+                        />
                         <RankingCard
                           title="⏸ Top 5 Pausas Improdutivas"
                           subtitle="Maior tempo acumulado em pausas não produtivas"
@@ -505,6 +510,15 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                             return h > 0 ? `${h}h ${m}min` : `${m} min`;
                           }}
                         />
+                      </div>
+                    </div>
+
+                    {/* Linha 3 — Campanhas + Tabulações */}
+                    <div>
+                      <p className="text-xs font-semibold text-white/25 uppercase tracking-widest mb-4">
+                        ④ Campanhas · ⑤ Tabulações Excedidas
+                      </p>
+                      <div className="grid grid-cols-2 gap-6">
                         <RankingCard
                           title="📊 Top 5 Campanhas"
                           subtitle="Maior volume de chamadas realizadas"
@@ -513,20 +527,13 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                           icon={<BarChart3 className="w-5 h-5" />}
                           formatValue={v => `${v.toLocaleString("pt-BR")} ch.`}
                         />
+                        <TabulacoesCard
+                          title="🚨 Top 5 Tabulações Excedidas"
+                          subtitle="Ocorrências + total de chamadas + tempo tabulado + supervisor responsável"
+                          items={(data?.top5Tabulacoes ?? []) as TabulacaoItem[]}
+                          totalGeral={data?.totalTabulacoesExcedidas}
+                        />
                       </div>
-                    </div>
-
-                    {/* Linha 3 — Tabulações (largura total) */}
-                    <div>
-                      <p className="text-xs font-semibold text-white/25 uppercase tracking-widest mb-4">
-                        ④ Tabulações Excedidas
-                      </p>
-                      <TabulacoesCard
-                        title="🚨 Top 5 Tabulações Excedidas"
-                        subtitle="Ocorrências + total de chamadas + tempo tabulado + supervisor responsável"
-                        items={(data?.top5Tabulacoes ?? []) as TabulacaoItem[]}
-                        totalGeral={data?.totalTabulacoesExcedidas}
-                      />
                     </div>
                   </>
                 )}
@@ -535,7 +542,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
           </TabsContent>
 
           {/* ─── ABA QUARTIL CPC ──────────────────────────────────────────── */}
-          <TabsContent value="quartil-cpc" className="m-0">
+          <TabsContent value="quartil-cpc" className="m-0 flex-1 overflow-y-auto">
             <div className="flex justify-end px-6 pt-4">
               <Button
                 onClick={() => handleExport(exportRefCPC, "quartil-cpc")}
@@ -581,7 +588,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                           title={`${q} — Top 5 CPC`}
                           subtitle={`${group.length} agentes neste quartil · Limiar: ≥ ${q === "Q1" ? quartilCPC.q.q3.toFixed(0) : q === "Q2" ? quartilCPC.q.q2.toFixed(0) : q === "Q3" ? quartilCPC.q.q1.toFixed(0) : "0"}`}
                           items={items}
-                          variant={variant as any}
+                          variant={variant as keyof typeof VARIANTS}
                           icon={<Target className="w-5 h-5" />}
                           formatValue={v => `${v} CPC`}
                         />
@@ -594,7 +601,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
           </TabsContent>
 
           {/* ─── ABA QUARTIL ACORDO ───────────────────────────────────────── */}
-          <TabsContent value="quartil-acordo" className="m-0">
+          <TabsContent value="quartil-acordo" className="m-0 flex-1 overflow-y-auto">
             <div className="flex justify-end px-6 pt-4">
               <Button
                 onClick={() => handleExport(exportRefAcordo, "quartil-acordo")}
@@ -610,7 +617,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
               <ExportSection exportRef={exportRefAcordo} today={today}>
                 <div className="mb-6">
                   <p className="text-sm font-semibold text-white/25 uppercase tracking-widest mb-2">Quartil Acordo — Sucesso de Negociação</p>
-                  <p className="text-sm text-white/35 mb-6">Distribuição dos agentes por faixa de desempenho em acordos fechados (Tabulações Sucesso Negócio)</p>
+                  <p className="text-sm text-white/35 mb-6">Distribuição dos agentes por faixa de desempenho em acordos fechados</p>
                   <div className="grid grid-cols-4 gap-5 mb-8">
                     {(["Q1", "Q2", "Q3", "Q4"] as const).map(q => {
                       const group = quartilAcordo.groups[q];
@@ -631,7 +638,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                         .map(r => ({
                           agente: r.agente ?? "",
                           valor: (r as any).tabulacoesSucessoNegocio ?? 0,
-                          detalhe: `${r.chamadasAtendidas ?? 0} atend.`,
+                          detalhe: `CPC: ${r.contatoEfetivo ?? 0}`,
                         }));
                       const variant = q === "Q1" ? "emerald" : q === "Q2" ? "blue" : q === "Q3" ? "amber" : "red";
                       return (
@@ -640,9 +647,9 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                           title={`${q} — Top 5 Acordos`}
                           subtitle={`${group.length} agentes neste quartil`}
                           items={items}
-                          variant={variant as any}
-                          icon={<Handshake className="w-5 h-5" />}
-                          formatValue={v => `${v} acord.`}
+                          variant={variant as keyof typeof VARIANTS}
+                          icon={<AlertTriangle className="w-5 h-5" />}
+                          formatValue={v => `${v} acordos`}
                         />
                       );
                     })}
@@ -653,7 +660,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
           </TabsContent>
 
           {/* ─── ABA QUARTIL ATENDIDA ─────────────────────────────────────── */}
-          <TabsContent value="quartil-atendida" className="m-0">
+          <TabsContent value="quartil-atendida" className="m-0 flex-1 overflow-y-auto">
             <div className="flex justify-end px-6 pt-4">
               <Button
                 onClick={() => handleExport(exportRefAtendida, "quartil-atendida")}
@@ -669,7 +676,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
               <ExportSection exportRef={exportRefAtendida} today={today}>
                 <div className="mb-6">
                   <p className="text-sm font-semibold text-white/25 uppercase tracking-widest mb-2">Quartil Atendida — Chamadas Atendidas</p>
-                  <p className="text-sm text-white/35 mb-6">Distribuição dos agentes por faixa de volume de chamadas atendidas no período</p>
+                  <p className="text-sm text-white/35 mb-6">Distribuição dos agentes por faixa de volume de chamadas atendidas</p>
                   <div className="grid grid-cols-4 gap-5 mb-8">
                     {(["Q1", "Q2", "Q3", "Q4"] as const).map(q => {
                       const group = quartilAtendida.groups[q];
@@ -690,7 +697,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                         .map(r => ({
                           agente: r.agente ?? "",
                           valor: r.chamadasAtendidas ?? 0,
-                          detalhe: `${r.contatoEfetivo ?? 0} CPC`,
+                          detalhe: `CPC: ${r.contatoEfetivo ?? 0}`,
                         }));
                       const variant = q === "Q1" ? "emerald" : q === "Q2" ? "blue" : q === "Q3" ? "amber" : "red";
                       return (
@@ -699,8 +706,8 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                           title={`${q} — Top 5 Atendidas`}
                           subtitle={`${group.length} agentes neste quartil`}
                           items={items}
-                          variant={variant as any}
-                          icon={<Phone className="w-5 h-5" />}
+                          variant={variant as keyof typeof VARIANTS}
+                          icon={<BarChart3 className="w-5 h-5" />}
                           formatValue={v => `${v} ch.`}
                         />
                       );

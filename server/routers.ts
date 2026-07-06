@@ -664,14 +664,49 @@ export const appRouter = router({
           valor: r.chamadasAtendidas ?? 0,
           detalhe: `CPC: ${r.contatoEfetivo ?? 0}`,
         }));
-        const bottom5Chamadas = [...humanAgents]
-          .filter(r => (r.chamadasAtendidas ?? 0) > 0)
-          .sort((a, b) => (a.chamadasAtendidas ?? 0) - (b.chamadasAtendidas ?? 0))
+        // "Baixa Produtividade" = muitas chamadas/tentativas mas poucos acordos ou CPC
+        // Métrica: chamadas atendidas >= mediana, mas CPC + acordos abaixo da mediana
+        // Ordenado por: maior razão (chamadas / (cpc + acordos + 1)) — esforço sem resultado
+        const agentsWithActivity = humanAgents.filter(r => (r.chamadasAtendidas ?? 0) >= 5);
+        const bottom5Chamadas = [...agentsWithActivity]
+          .map(r => {
+            const chamadas = r.chamadasAtendidas ?? 0;
+            const cpc = r.contatoEfetivo ?? 0;
+            const acordos = (r as any).tabulacoesSucessoNegocio ?? 0;
+            const resultado = cpc + acordos;
+            const esforcoSemResultado = chamadas / (resultado + 1); // +1 evita divisão por zero
+            return { r, chamadas, cpc, acordos, resultado, esforcoSemResultado };
+          })
+          .sort((a, b) => b.esforcoSemResultado - a.esforcoSemResultado)
           .slice(0, 5)
-          .map(r => ({
+          .map(({ r, chamadas, cpc, acordos }) => ({
             agente: r.agente ?? "",
-            valor: r.chamadasAtendidas ?? 0,
-            detalhe: `Ocioso: ${r.tempoOcioso ?? "00:00:00"}`,
+            valor: chamadas,
+            detalhe: `CPC: ${cpc} · Acordos: ${acordos}`,
+          }));
+
+        // ── Top 5 Suspeitos: alto CPC, baixo acordo (conversão suspeita) ──────────
+        // Métrica: CPC >= 5 mas taxa de conversão CPC→Acordo muito baixa
+        // Ordenado por: maior CPC com menor taxa de conversão
+        const top5Suspeitos = [...humanAgents]
+          .filter(r => (r.contatoEfetivo ?? 0) >= 5) // precisa ter CPC relevante
+          .map(r => {
+            const cpc = r.contatoEfetivo ?? 0;
+            const acordos = (r as any).tabulacoesSucessoNegocio ?? 0;
+            const taxaConversao = cpc > 0 ? (acordos / cpc) * 100 : 0;
+            return { r, cpc, acordos, taxaConversao };
+          })
+          .sort((a, b) => {
+            // Prioriza: mais CPC com menor conversão
+            const scoreA = a.cpc * (1 - a.taxaConversao / 100);
+            const scoreB = b.cpc * (1 - b.taxaConversao / 100);
+            return scoreB - scoreA;
+          })
+          .slice(0, 5)
+          .map(({ r, cpc, acordos, taxaConversao }) => ({
+            agente: r.agente ?? "",
+            valor: cpc,
+            detalhe: `Acordos: ${acordos} · Conv: ${taxaConversao.toFixed(1)}%`,
           }));
 
         // ── Faixa 2: Top 5 por pausas improdutivas ──────────────────────────────
@@ -756,6 +791,7 @@ export const appRouter = router({
           top5Campanhas,
           top5Tabulacoes,
           totalTabulacoesExcedidas: totalTabulacoesExcedidasExec,
+          top5Suspeitos,
         };
       }),
 
