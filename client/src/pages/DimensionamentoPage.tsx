@@ -54,7 +54,6 @@ const EMPTY_FORM = {
 function CrossCheckTab() {
   const utils = trpc.useUtils();
   const { data: sessions } = trpc.dashboard.getSessions.useQuery({ reportType: "AgentDay" });
-  // Usa a sessão mais recente de AgentDay
   const latestAgentDaySession = useMemo(() => {
     if (!sessions || sessions.length === 0) return undefined;
     return sessions[0]?.id;
@@ -64,6 +63,11 @@ function CrossCheckTab() {
     { sessionIds: latestAgentDaySession ? [latestAgentDaySession] : undefined },
     { enabled: true }
   );
+
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [filterCampanha, setFilterCampanha] = useState("all");
+  const [filterSupervisorCC, setFilterSupervisorCC] = useState("all");
+  const [searchCC, setSearchCC] = useState("");
 
   const createMutation = trpc.dimensionamento.create.useMutation({
     onSuccess: () => {
@@ -75,6 +79,42 @@ function CrossCheckTab() {
     onError: (e) => toast.error("Erro: " + e.message),
   });
 
+  const nao = useMemo(() => data?.naoNoDimensionamento ?? [], [data]);
+
+  // Listas únicas para filtros
+  const campanhasCC = useMemo(() => {
+    const s = new Set(nao.map(a => a.campanha).filter(Boolean));
+    return Array.from(s).sort() as string[];
+  }, [nao]);
+  const supervisoresCC = useMemo(() => {
+    const s = new Set(nao.map((a: any) => a.supervisor).filter(Boolean));
+    return Array.from(s).sort() as string[];
+  }, [nao]);
+
+  const naoFiltrado = useMemo(() => {
+    let d = nao;
+    if (filterCampanha !== "all") d = d.filter(a => a.campanha === filterCampanha);
+    if (filterSupervisorCC !== "all") d = d.filter((a: any) => a.supervisor === filterSupervisorCC);
+    if (searchCC) d = d.filter(a => a.agente?.toLowerCase().includes(searchCC.toLowerCase()) || a.login?.toLowerCase().includes(searchCC.toLowerCase()));
+    return d;
+  }, [nao, filterCampanha, filterSupervisorCC, searchCC]);
+
+  const allSelected = naoFiltrado.length > 0 && naoFiltrado.every((_, i) => selectedIds.has(i));
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(naoFiltrado.map((_, i) => i)));
+    }
+  }
+
+  function toggleOne(i: number) {
+    const next = new Set(selectedIds);
+    if (next.has(i)) next.delete(i); else next.add(i);
+    setSelectedIds(next);
+  }
+
   function addToDimensionamento(a: { agente: string; login: string; campanha: string; uf: string }) {
     createMutation.mutate({
       nome: a.agente,
@@ -85,6 +125,22 @@ function CrossCheckTab() {
     });
   }
 
+  async function addSelectedInBatch() {
+    const toAdd = naoFiltrado.filter((_, i) => selectedIds.has(i));
+    if (toAdd.length === 0) return;
+    for (const a of toAdd) {
+      await createMutation.mutateAsync({
+        nome: a.agente,
+        login: a.login || undefined,
+        uf: a.uf || undefined,
+        celula: a.campanha || undefined,
+        status: "ATIVO",
+      }).catch(() => {});
+    }
+    setSelectedIds(new Set());
+    toast.success(`${toAdd.length} operador(es) adicionado(s) ao dimensionamento!`);
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16 text-gray-500">
@@ -93,8 +149,6 @@ function CrossCheckTab() {
       </div>
     );
   }
-
-  const nao = data?.naoNoDimensionamento ?? [];
 
   return (
     <div className="space-y-4">
@@ -126,24 +180,96 @@ function CrossCheckTab() {
         </div>
       ) : (
         <div className="rounded-xl border border-orange-500/20 overflow-hidden">
-          <div className="px-4 py-3 bg-orange-500/5 border-b border-orange-500/15 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-orange-400" />
-            <span className="text-sm font-semibold text-orange-300">{nao.length} agente{nao.length !== 1 ? "s" : ""} no AgentDay sem cadastro no Dimensionamento</span>
-            <span className="ml-auto text-xs text-gray-500">Clique em + para adicionar rapidamente</span>
+          {/* Toolbar com filtros */}
+          <div className="px-4 py-3 bg-orange-500/5 border-b border-orange-500/15 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0" />
+              <span className="text-sm font-semibold text-orange-300">{nao.length} agente{nao.length !== 1 ? "s" : ""} sem cadastro no Dimensionamento</span>
+              {selectedIds.size > 0 && (
+                <Button
+                  size="sm"
+                  onClick={addSelectedInBatch}
+                  disabled={createMutation.isPending}
+                  className="ml-auto gap-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs h-7"
+                >
+                  <UserPlus className="w-3 h-3" />
+                  Adicionar {selectedIds.size} selecionado{selectedIds.size !== 1 ? "s" : ""}
+                </Button>
+              )}
+            </div>
+            {/* Filtros */}
+            <div className="flex gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-40">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+                <Input
+                  placeholder="Buscar agente ou login..."
+                  value={searchCC}
+                  onChange={e => setSearchCC(e.target.value)}
+                  className="pl-8 h-8 text-xs bg-white/5 border-white/10"
+                />
+              </div>
+              <Select value={filterCampanha} onValueChange={setFilterCampanha}>
+                <SelectTrigger className="w-44 h-8 text-xs bg-white/5 border-white/10">
+                  <SelectValue placeholder="Todas as campanhas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as campanhas</SelectItem>
+                  {campanhasCC.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {supervisoresCC.length > 0 && (
+                <Select value={filterSupervisorCC} onValueChange={setFilterSupervisorCC}>
+                  <SelectTrigger className="w-44 h-8 text-xs bg-white/5 border-white/10">
+                    <SelectValue placeholder="Todos os supervisores" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os supervisores</SelectItem>
+                    {supervisoresCC.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+              {(filterCampanha !== "all" || filterSupervisorCC !== "all" || searchCC) && (
+                <Button size="sm" variant="ghost" onClick={() => { setFilterCampanha("all"); setFilterSupervisorCC("all"); setSearchCC(""); }} className="h-8 text-xs text-gray-400 hover:text-white px-2">
+                  <X className="w-3.5 h-3.5" /> Limpar
+                </Button>
+              )}
+            </div>
+            {naoFiltrado.length !== nao.length && (
+              <p className="text-xs text-gray-500">Exibindo {naoFiltrado.length} de {nao.length} agentes</p>
+            )}
           </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/8 bg-white/3">
-                <th className="text-left px-4 py-3 text-gray-400 font-medium">Agente</th>
-                <th className="text-left px-4 py-3 text-gray-400 font-medium">Login</th>
-                <th className="text-left px-4 py-3 text-gray-400 font-medium">Produto/Célula</th>
-                <th className="text-left px-4 py-3 text-gray-400 font-medium">UF</th>
-                <th className="text-center px-4 py-3 text-gray-400 font-medium">Ação</th>
+                <th className="px-4 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="w-4 h-4 rounded accent-orange-500 cursor-pointer"
+                    title="Selecionar todos"
+                  />
+                </th>
+                <th className="text-left px-4 py-3 text-gray-400 font-medium text-xs">Agente</th>
+                <th className="text-left px-4 py-3 text-gray-400 font-medium text-xs">Login</th>
+                <th className="text-left px-4 py-3 text-gray-400 font-medium text-xs">Produto/Célula</th>
+                <th className="text-left px-4 py-3 text-gray-400 font-medium text-xs">UF</th>
+                <th className="text-center px-4 py-3 text-gray-400 font-medium text-xs">Ação</th>
               </tr>
             </thead>
             <tbody>
-              {nao.map((a, i) => (
-                <tr key={i} className={`border-b border-white/5 hover:bg-white/3 ${i % 2 === 0 ? "" : "bg-white/2"}`}>
+              {naoFiltrado.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-8 text-gray-500 text-sm">Nenhum agente encontrado com os filtros aplicados.</td></tr>
+              ) : naoFiltrado.map((a, i) => (
+                <tr key={i} className={`border-b border-white/5 hover:bg-white/3 ${selectedIds.has(i) ? "bg-orange-500/8" : i % 2 === 0 ? "" : "bg-white/2"}`}>
+                  <td className="px-4 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(i)}
+                      onChange={() => toggleOne(i)}
+                      className="w-4 h-4 rounded accent-orange-500 cursor-pointer"
+                    />
+                  </td>
                   <td className="px-4 py-3 text-white font-medium">{a.agente}</td>
                   <td className="px-4 py-3 text-gray-400 font-mono text-xs">{a.login || "—"}</td>
                   <td className="px-4 py-3 text-gray-300 text-xs">{a.campanha || "—"}</td>

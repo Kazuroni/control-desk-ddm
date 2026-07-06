@@ -10,9 +10,10 @@ import CampaignAgentPage from "./CampaignAgentPage";
 import DispositionAgentPage from "./DispositionAgentPage";
 import DimensionamentoPage from "./DimensionamentoPage";
 import CanaisRotasPage from "./CanaisRotas";
+import LoginLogoutPage from "./LoginLogoutPage";
 import {
   Upload, Activity, PauseCircle, BarChart3, AlertTriangle,
-  ChevronLeft, ChevronRight, Trophy, Users, Network
+  ChevronLeft, ChevronRight, Trophy, Users, Network, LogIn
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { id: "upload", label: "Importar Dados", icon: Upload, badge: null, color: "text-orange-400" },
   { id: "agentday", label: "Performance em Tempo Real", icon: Activity, badge: "AgentDay", color: "text-orange-400" },
+  { id: "loginlogout", label: "Login & Logout", icon: LogIn, badge: null, color: "text-emerald-400" },
   { id: "reasonagent", label: "TEMPOS", icon: PauseCircle, badge: "ReasonAgent", color: "text-blue-400" },
   { id: "campaignagent", label: "Performance por Célula/Campanha", icon: BarChart3, badge: "CampaignAgent", color: "text-emerald-400" },
   { id: "dispositionagent", label: "Tabulações Excedidas", icon: AlertTriangle, badge: "DispositionAgent", color: "text-red-400" },
@@ -176,6 +178,7 @@ export default function Home() {
         <main className="flex-1 overflow-y-auto px-6 py-4">
           {activeSection === "upload" && <UploadPage />}
           {activeSection === "agentday" && <AgentDayPage />}
+          {activeSection === "loginlogout" && <LoginLogoutPage />}
           {activeSection === "reasonagent" && <ReasonAgentPage />}
           {activeSection === "campaignagent" && <CampaignAgentPage />}
           {activeSection === "dispositionagent" && <DispositionAgentPage />}
