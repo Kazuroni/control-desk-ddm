@@ -81,9 +81,9 @@ function RankingCard({
                   {idx + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-white font-semibold leading-tight truncate">{item.agente}</p>
+                  <p className="text-sm text-white font-semibold leading-snug">{item.agente}</p>
                   <div className="flex items-center justify-between mt-0.5">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${s.badge}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded font-medium leading-snug ${s.badge}`} style={{ whiteSpace: "normal", wordBreak: "break-word" }}>
                       {item.detalhe}
                     </span>
                     <span className="text-sm font-bold text-white tabular-nums">{display}</span>
@@ -329,11 +329,11 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                       />
                     </div>
                   </div>
-                  <div>
+                  <div className="mb-4">
                     <p className="text-[10px] font-semibold text-white/25 uppercase tracking-widest mb-3">
-                      ② Pausas Improdutivas · ③ Campanhas · ④ Tabulações Excedidas
+                      ② Pausas Improdutivas · ③ Campanhas
                     </p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <RankingCard
                         title="⏸ Top 5 Pausas Improdutivas"
                         subtitle="Maior tempo acumulado em pausas não produtivas"
@@ -354,15 +354,20 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                         icon={<BarChart3 className="w-4 h-4" />}
                         formatValue={v => `${v.toLocaleString("pt-BR")} ch.`}
                       />
-                      <RankingCard
-                        title="🚨 Top 5 Tabulações Excedidas"
-                        subtitle="Maior número de ocorrências de tempo excedido"
-                        items={data?.top5Tabulacoes ?? []}
-                        variant="violet"
-                        icon={<AlertTriangle className="w-4 h-4" />}
-                        formatValue={v => `${v} ocorr.`}
-                      />
                     </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-white/25 uppercase tracking-widest mb-3">
+                      ④ Tabulações Excedidas
+                    </p>
+                    <RankingCard
+                      title="🚨 Top 5 Tabulações Excedidas"
+                      subtitle="Maior número de ocorrências de tempo excedido — nome completo do agente e total de ocorrências"
+                      items={data?.top5Tabulacoes ?? []}
+                      variant="violet"
+                      icon={<AlertTriangle className="w-4 h-4" />}
+                      formatValue={v => `${v} ocorr.`}
+                    />
                   </div>
                 </>
               )}
