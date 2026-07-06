@@ -51,6 +51,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function ReasonAgentPage() {
   const { filters } = useDashboard();
   const exportRef = useRef<HTMLDivElement>(null);
+  const refGeralTab = useRef<HTMLDivElement>(null);
+  const refNR17Tab = useRef<HTMLDivElement>(null);
+  const refBanheiroTab = useRef<HTMLDivElement>(null);
+  const refFeedbackTab = useRef<HTMLDivElement>(null);
+  const refOutrosTab = useRef<HTMLDivElement>(null);
+  const refAbusadoresTab = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState<string>("visao-geral");
   const [filtroMotivo, setFiltroMotivo] = useState<string>("all");
   const [filtroAgente, setFiltroAgente] = useState<string>("");
   const [filtroOutrosMotivo, setFiltroOutrosMotivo] = useState<string>("all");
@@ -59,6 +66,15 @@ export default function ReasonAgentPage() {
   const [filtroNR17Agente, setFiltroNR17Agente] = useState<string>("");
   const [filtroBanheiroAgente, setFiltroBanheiroAgente] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  const activeRef = useMemo(() => ({
+    "visao-geral": refGeralTab,
+    "nr17": refNR17Tab,
+    "banheiro": refBanheiroTab,
+    "feedback": refFeedbackTab,
+    "outros": refOutrosTab,
+    "abusadores": refAbusadoresTab,
+  } as Record<string, React.RefObject<HTMLDivElement | null>>), []);
 
   // Busca datas disponíveis no histórico
   const { data: availableDates } = trpc.dashboard.getAvailableDates.useQuery(
@@ -256,7 +272,7 @@ export default function ReasonAgentPage() {
             </Badge>
           )}
           <Button
-            onClick={() => exportPng(exportRef, `tempos-${selectedDate || new Date().toISOString().slice(0, 10)}.png`)}
+            onClick={() => exportPng(activeRef[activeTab] ?? exportRef, `tempos-${activeTab}-${selectedDate || new Date().toISOString().slice(0, 10)}.png`)}
             variant="outline" size="sm" className="gap-2"
           >
             <Download className="w-4 h-4" /> Exportar PNG
@@ -264,7 +280,7 @@ export default function ReasonAgentPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="visao-geral">
+      <Tabs defaultValue="visao-geral" onValueChange={setActiveTab}>
         <TabsList className="bg-card border border-border flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="visao-geral" className="gap-1.5 text-xs">
             <Activity className="w-3.5 h-3.5" /> Visão Geral
@@ -288,6 +304,7 @@ export default function ReasonAgentPage() {
 
         {/* ── Visão Geral ── */}
         <TabsContent value="visao-geral" className="space-y-5 mt-4">
+          <div ref={refGeralTab} className="space-y-5">
           {/* Cards de resumo */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
@@ -378,10 +395,12 @@ export default function ReasonAgentPage() {
               </div>
             )}
           </div>
+          </div>{/* /refGeralTab */}
         </TabsContent>
 
         {/* ── NR17 ── */}
         <TabsContent value="nr17" className="space-y-5 mt-4">
+          <div ref={refNR17Tab} className="space-y-5">
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex gap-3">
             <Shield className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
             <div>
@@ -475,10 +494,12 @@ export default function ReasonAgentPage() {
               </table>
             </div>
           </div>
+          </div>{/* /refNR17Tab */}
         </TabsContent>
 
         {/* ── Banheiro ── */}
         <TabsContent value="banheiro" className="space-y-5 mt-4">
+          <div ref={refBanheiroTab} className="space-y-5">
           <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 flex gap-3">
             <Coffee className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
             <div>
@@ -550,10 +571,12 @@ export default function ReasonAgentPage() {
               </table>
             </div>
           </div>
+          </div>{/* /refBanheiroTab */}
         </TabsContent>
 
         {/* ── Feedback/Treinamento ── */}
         <TabsContent value="feedback" className="space-y-5 mt-4">
+          <div ref={refFeedbackTab} className="space-y-5">
           <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex gap-3">
             <BookOpen className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
             <div>
@@ -604,10 +627,12 @@ export default function ReasonAgentPage() {
               </table>
             </div>
           </div>
+          </div>{/* /refFeedbackTab */}
         </TabsContent>
 
         {/* ── Outros ── */}
         <TabsContent value="outros" className="space-y-5 mt-4">
+          <div ref={refOutrosTab} className="space-y-5">
           <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-4 flex gap-3">
             <MoreHorizontal className="w-5 h-5 text-violet-400 shrink-0 mt-0.5" />
             <div>
@@ -685,10 +710,12 @@ export default function ReasonAgentPage() {
               </table>
             </div>
           </div>
+          </div>{/* /refOutrosTab */}
         </TabsContent>
 
         {/* ── Abusadores ── */}
         <TabsContent value="abusadores" className="space-y-5 mt-4">
+          <div ref={refAbusadoresTab} className="space-y-5">
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex gap-3">
             <Flame className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
             <div>
@@ -717,7 +744,7 @@ export default function ReasonAgentPage() {
           </div>
 
           {/* Tabela de abusadores */}
-          <div ref={exportRef} className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
@@ -786,6 +813,7 @@ export default function ReasonAgentPage() {
               </table>
             </div>
           </div>
+          </div>{/* /refAbusadoresTab */}
         </TabsContent>
       </Tabs>
     </div>

@@ -295,7 +295,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
             </div>
             <ExportSection exportRef={exportRefConsolidado} today={today}>
               {isLoading ? (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-6">
                   {Array.from({ length: 5 }).map((_, i) => (
                     <Skeleton key={i} className="h-52 rounded-xl bg-white/5" />
                   ))}
@@ -386,7 +386,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
               <div className="mb-4">
                 <p className="text-[10px] font-semibold text-white/25 uppercase tracking-widest mb-1">Quartil CPC — Contato com Pessoa Certa</p>
                 <p className="text-xs text-white/35 mb-4">Distribuição dos agentes por faixa de desempenho em CPC (número de contatos efetivos)</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                   {(["Q1", "Q2", "Q3", "Q4"] as const).map(q => {
                     const group = quartilCPC.groups[q];
                     const avg = group.length > 0
@@ -397,7 +397,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                   })}
                 </div>
                 <p className="text-[10px] font-semibold text-white/25 uppercase tracking-widest mb-3">Detalhamento por Quartil</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {(["Q1", "Q2", "Q3", "Q4"] as const).map(q => {
                     const group = quartilCPC.groups[q];
                     const s = QUARTIL_STYLES[q];
@@ -444,7 +444,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
               <div className="mb-4">
                 <p className="text-[10px] font-semibold text-white/25 uppercase tracking-widest mb-1">Quartil Acordo — Sucesso de Negociação</p>
                 <p className="text-xs text-white/35 mb-4">Distribuição dos agentes por faixa de desempenho em acordos fechados (Tabulações Sucesso Negócio)</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                   {(["Q1", "Q2", "Q3", "Q4"] as const).map(q => {
                     const group = quartilAcordo.groups[q];
                     const avg = group.length > 0
@@ -455,7 +455,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                   })}
                 </div>
                 <p className="text-[10px] font-semibold text-white/25 uppercase tracking-widest mb-3">Detalhamento por Quartil</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {(["Q1", "Q2", "Q3", "Q4"] as const).map(q => {
                     const group = quartilAcordo.groups[q];
                     const items = [...group]
@@ -501,7 +501,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
               <div className="mb-4">
                 <p className="text-[10px] font-semibold text-white/25 uppercase tracking-widest mb-1">Quartil Atendida — Chamadas Atendidas</p>
                 <p className="text-xs text-white/35 mb-4">Distribuição dos agentes por faixa de volume de chamadas atendidas no período</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                   {(["Q1", "Q2", "Q3", "Q4"] as const).map(q => {
                     const group = quartilAtendida.groups[q];
                     const avg = group.length > 0
@@ -512,7 +512,7 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                   })}
                 </div>
                 <p className="text-[10px] font-semibold text-white/25 uppercase tracking-widest mb-3">Detalhamento por Quartil</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {(["Q1", "Q2", "Q3", "Q4"] as const).map(q => {
                     const group = quartilAtendida.groups[q];
                     const items = [...group]
