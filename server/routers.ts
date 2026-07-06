@@ -902,13 +902,53 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    delete: publicProcedure
+        delete: publicProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await deleteDimensionamento(input.id);
         return { success: true };
       }),
+    // Cruzamento: quem está no AgentDay mas não no Dimensionamento
+    crossCheck: publicProcedure
+      .input(z.object({ sessionIds: z.array(z.number()).optional() }))
+      .query(async ({ input }) => {
+        const [agentRows, dimRows] = await Promise.all([
+          getAgentDayRecords({ sessionIds: input.sessionIds }),
+          getDimensionamento({}),
+        ]);
+        // Nomes normalizados do dimensionamento
+        const dimNomes = new Set(
+          dimRows.map(d => (d.nome || "").trim().toUpperCase())
+        );
+        const dimLogins = new Set(
+          dimRows.map(d => (d.login || "").trim().toLowerCase()).filter(Boolean)
+        );
+        // Agentes únicos do AgentDay
+        const agentesMap = new Map<string, { agente: string; login: string; campanha: string; uf: string }>();
+        for (const row of agentRows) {
+          const nome = (row.agente || "").trim();
+          if (!nome) continue;
+          if (!agentesMap.has(nome)) {
+            agentesMap.set(nome, {
+              agente: nome,
+              login: row.login || "",
+              campanha: row.produto || "",
+              uf: row.uf || "",
+            });
+          }
+        }
+        // Filtrar quem não está no dimensionamento
+        const naoNoDimensionamento = Array.from(agentesMap.values()).filter(a => {
+          const nomeUp = a.agente.toUpperCase();
+          const loginLow = a.login.toLowerCase();
+          return !dimNomes.has(nomeUp) && !(loginLow && dimLogins.has(loginLow));
+        });
+        return {
+          totalAgentDay: agentesMap.size,
+          totalDimensionamento: dimRows.length,
+          naoNoDimensionamento,
+        };
+      }),
   }),
 });
-
 export type AppRouter = typeof appRouter;

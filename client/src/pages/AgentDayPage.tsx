@@ -3,7 +3,8 @@ import { trpc } from "@/lib/trpc";
 import { useDashboard } from "@/contexts/DashboardContext";
 import {
   ChevronUp, ChevronDown, ChevronsUpDown, Download, Search,
-  Phone, Target, Clock, AlertTriangle, TrendingUp, Award, Users, Filter
+  Phone, Target, Clock, AlertTriangle, TrendingUp, Award, Users, Filter,
+  LogIn, LogOut, CheckCircle2, XCircle
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -98,6 +99,9 @@ export default function AgentDayPage() {
   const [supervisorFilter, setSupervisorFilter] = useState("all");
   const exportRef = useRef<HTMLDivElement>(null);
   const tableExportRef = useRef<HTMLDivElement>(null);
+  const loginExportRef = useRef<HTMLDivElement>(null);
+  const [loginCampanhaFilter, setLoginCampanhaFilter] = useState("all");
+  const [loginTab, setLoginTab] = useState<"logados" | "nao_logados">("logados");
 
   const { data: rows = [], isLoading } = trpc.dashboard.getAgentDay.useQuery({
     sessionIds: filters.sessionIds.length > 0 ? filters.sessionIds : undefined,
@@ -240,6 +244,51 @@ export default function AgentDayPage() {
 
   const handleExportTable = () => exportPng(tableExportRef, `performance-tabela-${new Date().toISOString().slice(0, 10)}.png`);
   const handleExportQuartil = () => exportPng(exportRef, `performance-quartil-${new Date().toISOString().slice(0, 10)}.png`);
+  const handleExportLogin = () => exportPng(loginExportRef, `login-logout-${new Date().toISOString().slice(0, 10)}.png`);
+
+  // Dados para Login & Logout
+  // Quem LOGOU: está no AgentDay (humanRows)
+  const logadosHoje = useMemo(() => humanRows.map(r => ({
+    agente: r.agente || "",
+    login: r.login || "",
+    campanha: (r as any).celula || (r as any).produto || "",
+    supervisor: (r as any).supervisorDim || "",
+    primeiroLogin: r.primeiroLogin || "",
+    ultimoLogout: r.ultimoLogout || "",
+    tempoLogado: r.tempoLogado || "",
+  })), [humanRows]);
+
+  // Quem NÃO LOGOU: está no dimensionamento mas não apareceu no AgentDay
+  const { data: dimAll = [] } = trpc.dimensionamento.list.useQuery({ status: "ATIVO" });
+  const naoLogados = useMemo(() => {
+    const logadosNomes = new Set(humanRows.map(r => (r.agente || "").trim().toUpperCase()));
+    const logadosLogins = new Set(humanRows.map(r => (r.login || "").trim().toLowerCase()).filter(Boolean));
+    return dimAll.filter(d => {
+      const nomeUp = (d.nome || "").trim().toUpperCase();
+      const loginLow = (d.login || "").trim().toLowerCase();
+      return !logadosNomes.has(nomeUp) && !(loginLow && logadosLogins.has(loginLow));
+    });
+  }, [dimAll, humanRows]);
+
+  // Campanhas únicas para filtro
+  const campanhasLogin = useMemo(() => {
+    const s = new Set(logadosHoje.map(r => r.campanha).filter(Boolean));
+    return Array.from(s).sort();
+  }, [logadosHoje]);
+  const campanhasNaoLogin = useMemo(() => {
+    const s = new Set(naoLogados.map(r => r.celula || "").filter(Boolean));
+    return Array.from(s).sort();
+  }, [naoLogados]);
+
+  const logadosFiltrados = useMemo(() => {
+    if (loginCampanhaFilter === "all") return logadosHoje;
+    return logadosHoje.filter(r => r.campanha === loginCampanhaFilter);
+  }, [logadosHoje, loginCampanhaFilter]);
+
+  const naoLogadosFiltrados = useMemo(() => {
+    if (loginCampanhaFilter === "all") return naoLogados;
+    return naoLogados.filter(r => (r.celula || "") === loginCampanhaFilter);
+  }, [naoLogados, loginCampanhaFilter]);
 
   const QUARTIL_COLORS: Record<string, string> = {
     Q1: "#22c55e", Q2: "#3b82f6", Q3: "#f59e0b", Q4: "#ef4444"
@@ -290,6 +339,9 @@ export default function AgentDayPage() {
           </TabsTrigger>
           <TabsTrigger value="quartil" className="gap-2">
             <Award className="w-3.5 h-3.5" /> Análise por Quartil
+          </TabsTrigger>
+          <TabsTrigger value="login" className="gap-2">
+            <LogIn className="w-3.5 h-3.5" /> Login &amp; Logout
           </TabsTrigger>
         </TabsList>
 
@@ -768,6 +820,173 @@ export default function AgentDayPage() {
                 )) : <p className="text-xs text-muted-foreground">Nenhuma pausa improdutiva registrada</p>}
               </div>
             </div>
+          </div>
+        </TabsContent>
+
+        {/* ── Aba: Login & Logout ── */}
+        <TabsContent value="login" className="space-y-4 mt-4">
+          {/* Toolbar */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <Select value={loginCampanhaFilter} onValueChange={v => { setLoginCampanhaFilter(v); }}>
+                <SelectTrigger className="w-48 bg-card border-border">
+                  <SelectValue placeholder="Todas as campanhas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as campanhas</SelectItem>
+                  {(loginTab === "logados" ? campanhasLogin : campanhasNaoLogin).map(c => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex rounded-lg border border-border overflow-hidden">
+                <button
+                  onClick={() => { setLoginTab("logados"); setLoginCampanhaFilter("all"); }}
+                  className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                    loginTab === "logados" ? "bg-emerald-500/20 text-emerald-300" : "text-muted-foreground hover:bg-card"
+                  }`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Logados ({logadosHoje.length})
+                </button>
+                <button
+                  onClick={() => { setLoginTab("nao_logados"); setLoginCampanhaFilter("all"); }}
+                  className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition-colors border-l border-border ${
+                    loginTab === "nao_logados" ? "bg-red-500/20 text-red-300" : "text-muted-foreground hover:bg-card"
+                  }`}
+                >
+                  <XCircle className="w-3.5 h-3.5" /> Não Logados ({naoLogados.length})
+                </button>
+              </div>
+            </div>
+            <Button onClick={handleExportLogin} variant="outline" size="sm" className="gap-2">
+              <Download className="w-4 h-4" /> Exportar PNG
+            </Button>
+          </div>
+
+          {/* KPIs */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-card border border-border rounded-xl p-4">
+              <p className="text-xs text-muted-foreground mb-1">Logados Hoje</p>
+              <p className="text-2xl font-black text-emerald-400">{logadosHoje.length}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Aparecem no AgentDay</p>
+            </div>
+            <div className="bg-card border border-border rounded-xl p-4">
+              <p className="text-xs text-muted-foreground mb-1">Não Logados</p>
+              <p className={`text-2xl font-black ${naoLogados.length > 0 ? "text-red-400" : "text-emerald-400"}`}>{naoLogados.length}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">No dimensionamento, sem login</p>
+            </div>
+            <div className="bg-card border border-border rounded-xl p-4">
+              <p className="text-xs text-muted-foreground mb-1">Taxa de Login</p>
+              <p className="text-2xl font-black text-foreground">
+                {dimAll.length > 0 ? Math.round(logadosHoje.length / (logadosHoje.length + naoLogados.length) * 100) : 0}%
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">{logadosHoje.length} de {logadosHoje.length + naoLogados.length} ativos</p>
+            </div>
+          </div>
+
+          {/* Tabela exportável */}
+          <div ref={loginExportRef} className="bg-[#0f1117] rounded-xl border border-border overflow-hidden">
+            {/* Header do export */}
+            <div className="p-4 border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 bg-orange-500 rounded-lg flex items-center justify-center text-white font-bold text-xs">DDM</div>
+                <div>
+                  <p className="text-sm font-bold text-foreground">Controle de Login &amp; Logout</p>
+                  <p className="text-xs text-muted-foreground">{new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                  loginTab === "logados" ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"
+                }`}>
+                  {loginTab === "logados" ? `✓ ${logadosFiltrados.length} Logados` : `✗ ${naoLogadosFiltrados.length} Não Logados`}
+                </span>
+              </div>
+            </div>
+
+            {loginTab === "logados" ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-card/50">
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium text-xs">#</th>
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium text-xs">Agente</th>
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium text-xs">Login</th>
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium text-xs">Campanha</th>
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium text-xs">Supervisor</th>
+                      <th className="text-center px-4 py-3 text-muted-foreground font-medium text-xs">1º Login</th>
+                      <th className="text-center px-4 py-3 text-muted-foreground font-medium text-xs">Últ. Logout</th>
+                      <th className="text-center px-4 py-3 text-muted-foreground font-medium text-xs">T. Logado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logadosFiltrados.length === 0 ? (
+                      <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum agente logado encontrado.</td></tr>
+                    ) : logadosFiltrados.map((r, i) => (
+                      <tr key={i} className={`border-b border-border/50 hover:bg-card/30 ${i % 2 === 0 ? "" : "bg-card/10"}`}>
+                        <td className="px-4 py-2.5 text-muted-foreground text-xs">{i + 1}</td>
+                        <td className="px-4 py-2.5 text-foreground font-medium text-sm">{r.agente}</td>
+                        <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{r.login || "—"}</td>
+                        <td className="px-4 py-2.5 text-xs">
+                          {r.campanha ? <span className="px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 text-xs">{r.campanha}</span> : <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-muted-foreground text-xs">{r.supervisor || "—"}</td>
+                        <td className="px-4 py-2.5 text-center">
+                          <span className="text-xs font-mono text-emerald-400">{r.primeiroLogin || "—"}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <span className="text-xs font-mono text-amber-400">{r.ultimoLogout || "—"}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <span className="text-xs font-mono text-foreground">{r.tempoLogado || "—"}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-card/50">
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium text-xs">#</th>
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium text-xs">Agente</th>
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium text-xs">Login</th>
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium text-xs">Campanha</th>
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium text-xs">Supervisor</th>
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium text-xs">Turno</th>
+                      <th className="text-left px-4 py-3 text-muted-foreground font-medium text-xs">Horário</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {naoLogadosFiltrados.length === 0 ? (
+                      <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Todos os operadores ativos estão logados!</td></tr>
+                    ) : naoLogadosFiltrados.map((d, i) => (
+                      <tr key={i} className={`border-b border-border/50 hover:bg-card/30 ${i % 2 === 0 ? "" : "bg-card/10"}`}>
+                        <td className="px-4 py-2.5 text-muted-foreground text-xs">{i + 1}</td>
+                        <td className="px-4 py-2.5 text-foreground font-medium text-sm">{d.nome}</td>
+                        <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{d.login || "—"}</td>
+                        <td className="px-4 py-2.5 text-xs">
+                          {d.celula ? <span className="px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-300 text-xs">{d.celula}</span> : <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-muted-foreground text-xs">{d.supervisor || "—"}</td>
+                        <td className="px-4 py-2.5 text-xs">
+                          {d.turno ? <span className={`px-1.5 py-0.5 rounded text-xs ${
+                            d.turno === "MANHÃ" ? "bg-blue-500/15 text-blue-300" :
+                            d.turno === "TARDE" ? "bg-orange-500/15 text-orange-300" :
+                            "bg-purple-500/15 text-purple-300"
+                          }`}>{d.turno}</span> : <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-muted-foreground text-xs font-mono">
+                          {d.entrada && d.saida ? `${d.entrada}–${d.saida}` : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </TabsContent>
       </Tabs>

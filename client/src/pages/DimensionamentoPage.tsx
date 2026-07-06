@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import {
   Users, Search, Plus, Pencil, Trash2, Download, FileSpreadsheet,
   Image, Filter, Building2, Clock, MapPin, ChevronDown, ChevronUp, X,
-  Upload, CheckCircle2, AlertCircle, Loader2
+  Upload, CheckCircle2, AlertCircle, Loader2, AlertTriangle, UserPlus
 } from "lucide-react";
 import { toPng } from "html-to-image";
 import * as XLSX from "xlsx";
@@ -50,6 +50,126 @@ const EMPTY_FORM = {
   entradaS: "", saidaS: "",
 };
 
+// ─── Cruzamento AgentDay x Dimensionamento ──────────────────────────────────────────────────────────────────────
+function CrossCheckTab() {
+  const utils = trpc.useUtils();
+  const { data: sessions } = trpc.dashboard.getSessions.useQuery({ reportType: "AgentDay" });
+  // Usa a sessão mais recente de AgentDay
+  const latestAgentDaySession = useMemo(() => {
+    if (!sessions || sessions.length === 0) return undefined;
+    return sessions[0]?.id;
+  }, [sessions]);
+
+  const { data, isLoading } = trpc.dimensionamento.crossCheck.useQuery(
+    { sessionIds: latestAgentDaySession ? [latestAgentDaySession] : undefined },
+    { enabled: true }
+  );
+
+  const createMutation = trpc.dimensionamento.create.useMutation({
+    onSuccess: () => {
+      utils.dimensionamento.list.invalidate();
+      utils.dimensionamento.stats.invalidate();
+      utils.dimensionamento.crossCheck.invalidate();
+      toast.success("Operador adicionado ao dimensionamento!");
+    },
+    onError: (e) => toast.error("Erro: " + e.message),
+  });
+
+  function addToDimensionamento(a: { agente: string; login: string; campanha: string; uf: string }) {
+    createMutation.mutate({
+      nome: a.agente,
+      login: a.login || undefined,
+      uf: a.uf || undefined,
+      celula: a.campanha || undefined,
+      status: "ATIVO",
+    });
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16 text-gray-500">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" />
+        Cruzando dados...
+      </div>
+    );
+  }
+
+  const nao = data?.naoNoDimensionamento ?? [];
+
+  return (
+    <div className="space-y-4">
+      {/* KPIs */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="rounded-xl border border-white/8 bg-white/3 p-4">
+          <p className="text-xs text-gray-400 mb-1">Agentes no AgentDay</p>
+          <p className="text-2xl font-black text-white">{data?.totalAgentDay ?? 0}</p>
+          <p className="text-xs text-gray-500 mt-0.5">Sessão mais recente</p>
+        </div>
+        <div className="rounded-xl border border-white/8 bg-white/3 p-4">
+          <p className="text-xs text-gray-400 mb-1">No Dimensionamento</p>
+          <p className="text-2xl font-black text-white">{data?.totalDimensionamento ?? 0}</p>
+          <p className="text-xs text-gray-500 mt-0.5">Cadastros ativos</p>
+        </div>
+        <div className={`rounded-xl border p-4 ${nao.length > 0 ? "border-orange-500/30 bg-orange-500/5" : "border-emerald-500/30 bg-emerald-500/5"}`}>
+          <p className="text-xs text-gray-400 mb-1">Não Cadastrados</p>
+          <p className={`text-2xl font-black ${nao.length > 0 ? "text-orange-400" : "text-emerald-400"}`}>{nao.length}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{nao.length === 0 ? "Todos cadastrados!" : "Precisam ser adicionados"}</p>
+        </div>
+      </div>
+
+      {/* Tabela de não cadastrados */}
+      {nao.length === 0 ? (
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-8 text-center">
+          <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
+          <p className="text-white font-semibold">Todos os agentes estão cadastrados!</p>
+          <p className="text-gray-400 text-sm mt-1">Nenhum agente do AgentDay está fora do dimensionamento.</p>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-orange-500/20 overflow-hidden">
+          <div className="px-4 py-3 bg-orange-500/5 border-b border-orange-500/15 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-orange-400" />
+            <span className="text-sm font-semibold text-orange-300">{nao.length} agente{nao.length !== 1 ? "s" : ""} no AgentDay sem cadastro no Dimensionamento</span>
+            <span className="ml-auto text-xs text-gray-500">Clique em + para adicionar rapidamente</span>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/8 bg-white/3">
+                <th className="text-left px-4 py-3 text-gray-400 font-medium">Agente</th>
+                <th className="text-left px-4 py-3 text-gray-400 font-medium">Login</th>
+                <th className="text-left px-4 py-3 text-gray-400 font-medium">Produto/Célula</th>
+                <th className="text-left px-4 py-3 text-gray-400 font-medium">UF</th>
+                <th className="text-center px-4 py-3 text-gray-400 font-medium">Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nao.map((a, i) => (
+                <tr key={i} className={`border-b border-white/5 hover:bg-white/3 ${i % 2 === 0 ? "" : "bg-white/2"}`}>
+                  <td className="px-4 py-3 text-white font-medium">{a.agente}</td>
+                  <td className="px-4 py-3 text-gray-400 font-mono text-xs">{a.login || "—"}</td>
+                  <td className="px-4 py-3 text-gray-300 text-xs">{a.campanha || "—"}</td>
+                  <td className="px-4 py-3 text-blue-300 text-xs font-medium">{a.uf || "—"}</td>
+                  <td className="px-4 py-3 text-center">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => addToDimensionamento(a)}
+                      disabled={createMutation.isPending}
+                      className="gap-1.5 border-orange-500/30 text-orange-300 hover:bg-orange-500/10 hover:text-orange-200 text-xs h-7"
+                    >
+                      <UserPlus className="w-3 h-3" />
+                      Adicionar
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DimensionamentoPage() {
   const [search, setSearch] = useState("");
   const [filterCelula, setFilterCelula] = useState("all");
@@ -57,7 +177,7 @@ export default function DimensionamentoPage() {
   const [filterTurno, setFilterTurno] = useState("all");
   const [filterUf, setFilterUf] = useState("all");
   const [filterStatus, setFilterStatus] = useState("ATIVO");
-  const [viewMode, setViewMode] = useState<"tabela" | "celulas">("tabela");
+  const [viewMode, setViewMode] = useState<"tabela" | "celulas" | "cruzamento">("tabela");
   const [showFilters, setShowFilters] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -402,6 +522,10 @@ export default function DimensionamentoPage() {
           <TabsTrigger value="celulas" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
             Por Célula / Campanha
           </TabsTrigger>
+          <TabsTrigger value="cruzamento" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Não Cadastrados
+          </TabsTrigger>
         </TabsList>
 
         {/* Tabela Geral */}
@@ -590,6 +714,11 @@ export default function DimensionamentoPage() {
               );
             })}
           </div>
+        </TabsContent>
+
+        {/* Cruzamento AgentDay x Dimensionamento */}
+        <TabsContent value="cruzamento">
+          <CrossCheckTab />
         </TabsContent>
       </Tabs>
 

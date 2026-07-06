@@ -85,6 +85,7 @@ function KpiCard({ label, value, sub, icon, color }: {
 function CampanhasTab() {
   const utils = trpc.useUtils();
   const { data: campanhas = [], isLoading } = trpc.canaisRotas.getCampanhas.useQuery();
+  const { data: rotas = [] } = trpc.canaisRotas.getRotas.useQuery();
   const upsert = trpc.canaisRotas.upsertCampanha.useMutation({
     onSuccess: () => { utils.canaisRotas.getCampanhas.invalidate(); utils.canaisRotas.getSummary.invalidate(); toast.success("Campanha salva!"); setModalOpen(false); },
     onError: (e) => toast.error(e.message),
@@ -100,6 +101,8 @@ function CampanhasTab() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ campanha: "", ativo: "Sim", solicitado: 0, alocado: 0, rotaCadastrada: "", observacao: "" });
+  // Edição inline de alocado
+  const [inlineEdit, setInlineEdit] = useState<{ id: number; value: string } | null>(null);
 
   function toggleSort(k: typeof sortKey) {
     if (sortKey === k) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -139,15 +142,27 @@ function CampanhasTab() {
 
   const totalSolicitado = campanhas.reduce((s, r) => s + (r.solicitado ?? 0), 0);
   const totalAlocado = campanhas.reduce((s, r) => s + (r.alocado ?? 0), 0);
+  // KPIs dinâmicos de canais (calculados a partir das rotas)
+  const totalCanaisRotas = rotas.reduce((s, r) => s + (r.quantidadeCanais ?? 0), 0);
+  const canaisLivres = Math.max(0, totalCanaisRotas - totalAlocado);
+
+  function commitInlineEdit(r: any) {
+    if (!inlineEdit) return;
+    const newAlocado = Number(inlineEdit.value);
+    if (isNaN(newAlocado)) { setInlineEdit(null); return; }
+    upsert.mutate({ id: r.id, campanha: r.campanha, ativo: r.ativo ?? "Sim", solicitado: r.solicitado ?? 0, alocado: newAlocado, rotaCadastrada: r.rotaCadastrada ?? null, observacao: r.observacao ?? null });
+    setInlineEdit(null);
+  }
 
   return (
     <div>
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-5 gap-4 mb-6">
         <KpiCard label="Campanhas" value={campanhas.length} sub={`${campanhas.filter(r => r.ativo === "Sim").length} ativas`} icon={<Radio className="w-5 h-5 text-orange-400" />} color="border-orange-500/20 bg-orange-500/5" />
-        <KpiCard label="Canais Solicitados" value={totalSolicitado} icon={<TrendingUp className="w-5 h-5 text-blue-400" />} color="border-blue-500/20 bg-blue-500/5" />
-        <KpiCard label="Canais Alocados" value={totalAlocado} icon={<Network className="w-5 h-5 text-emerald-400" />} color="border-emerald-500/20 bg-emerald-500/5" />
-        <KpiCard label="Saldo" value={totalSolicitado - totalAlocado} sub={totalSolicitado - totalAlocado < 0 ? "Excedendo limite" : "Disponível"} icon={<TrendingDown className="w-5 h-5 text-amber-400" />} color="border-amber-500/20 bg-amber-500/5" />
+        <KpiCard label="Canais Totais" value={totalCanaisRotas} sub="Soma das rotas" icon={<Network className="w-5 h-5 text-blue-400" />} color="border-blue-500/20 bg-blue-500/5" />
+        <KpiCard label="Canais Alocados" value={totalAlocado} sub={`${totalCanaisRotas > 0 ? Math.round(totalAlocado / totalCanaisRotas * 100) : 0}% em uso`} icon={<TrendingUp className="w-5 h-5 text-emerald-400" />} color="border-emerald-500/20 bg-emerald-500/5" />
+        <KpiCard label="Canais Livres" value={canaisLivres} sub={canaisLivres === 0 ? "Capacidade máxima" : "Disponíveis"} icon={<TrendingDown className="w-5 h-5 text-cyan-400" />} color={`border-cyan-500/20 ${canaisLivres === 0 ? "bg-red-500/5" : "bg-cyan-500/5"}`} />
+        <KpiCard label="Saldo Campanha" value={totalSolicitado - totalAlocado} sub={totalSolicitado - totalAlocado < 0 ? "Excedendo" : "Disponível"} icon={<TrendingDown className="w-5 h-5 text-amber-400" />} color="border-amber-500/20 bg-amber-500/5" />
       </div>
 
       {/* Toolbar */}
@@ -183,23 +198,44 @@ function CampanhasTab() {
               <th className="text-left px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort("rotaCadastrada")}>
                 <span className="flex items-center gap-1 text-white/70 font-semibold">Rota <SortIcon active={sortKey === "rotaCadastrada"} dir={sortDir} /></span>
               </th>
+              <th className="text-left px-4 py-3 text-white/50 font-semibold">Observação</th>
               <th className="text-center px-4 py-3 text-white/50 font-semibold">Ações</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i}><td colSpan={8} className="px-4 py-3"><Skeleton className="h-5 bg-white/5" /></td></tr>
+                <tr key={i}>              <td colSpan={9} className="px-4 py-3"><Skeleton className="h-5 bg-white/5" /></td></tr>
               ))
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-12 text-white/30">Nenhuma campanha encontrada.</td></tr>
+              <tr><td colSpan={9} className="text-center py-12 text-white/30">Nenhuma campanha encontrada.</td></tr>
             ) : filtered.map((r, i) => (
               <tr key={r.id} className={`border-b border-white/5 hover:bg-white/3 ${i % 2 === 0 ? "" : "bg-white/2"}`}>
                 <td className="px-4 py-3 text-white/25 text-xs">{i + 1}</td>
                 <td className="px-4 py-3 text-white font-medium">{r.campanha}</td>
                 <td className="px-4 py-3 text-center">{ativoBadge(r.ativo)}</td>
                 <td className="px-4 py-3 text-center text-white tabular-nums">{r.solicitado ?? 0}</td>
-                <td className="px-4 py-3 text-center text-white tabular-nums">{r.alocado ?? 0}</td>
+                <td className="px-4 py-3 text-center">
+                  {inlineEdit?.id === r.id ? (
+                    <input
+                      type="number"
+                      autoFocus
+                      value={inlineEdit.value}
+                      onChange={e => setInlineEdit({ id: r.id, value: e.target.value })}
+                      onBlur={() => commitInlineEdit(r)}
+                      onKeyDown={e => { if (e.key === "Enter") commitInlineEdit(r); if (e.key === "Escape") setInlineEdit(null); }}
+                      className="w-16 text-center bg-orange-500/15 border border-orange-500/40 rounded px-1 py-0.5 text-white text-sm tabular-nums outline-none"
+                    />
+                  ) : (
+                    <span
+                      className="tabular-nums text-white cursor-pointer hover:text-orange-300 hover:underline transition-colors"
+                      title="Clique para editar"
+                      onClick={() => setInlineEdit({ id: r.id, value: String(r.alocado ?? 0) })}
+                    >
+                      {r.alocado ?? 0}
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-center">
                   <span className={`font-bold tabular-nums ${(r.saldo ?? 0) < 0 ? "text-red-400" : (r.saldo ?? 0) === 0 ? "text-white/50" : "text-emerald-400"}`}>
                     {(r.saldo ?? 0) > 0 ? "+" : ""}{r.saldo ?? 0}
@@ -209,6 +245,11 @@ function CampanhasTab() {
                   {r.rotaCadastrada ? (
                     <span className="text-xs px-2 py-1 rounded bg-white/8 text-white/70 font-mono">{r.rotaCadastrada}</span>
                   ) : <span className="text-white/25">—</span>}
+                </td>
+                <td className="px-4 py-3 max-w-[200px]">
+                  {r.observacao ? (
+                    <span className="text-xs text-white/50 leading-relaxed line-clamp-2" title={r.observacao}>{r.observacao}</span>
+                  ) : <span className="text-white/20">—</span>}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-center gap-2">
