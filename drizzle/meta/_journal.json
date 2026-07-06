@@ -29,6 +29,13 @@
       "when": 1783030966452,
       "tag": "0003_icy_psylocke",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1783369380906,
+      "tag": "0004_lonely_madripoor",
+      "breakpoints": true
     }
   ]
 }

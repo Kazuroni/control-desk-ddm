@@ -136,3 +136,8 @@
 - [x] Botão 'Importar Excel' na tela de Dimensionamento
 - [x] Exibir resumo pós-importação: X inseridos, Y atualizados, Z ignorados
 
+- [x] Canais & Rotas: criar schema DB (canais_rotas_campanhas, canais_rotas_rotas, canais_rotas_diario, canais_rotas_ia)
+- [x] Canais & Rotas: endpoints tRPC CRUD completos (getCampanhas, upsertCampanha, deleteCampanha, bulkInsert, getRotas, upsertRota, deleteRota, getDiario, addDiario, deleteDiario, getCanaisIA, upsertCanaisIA, deleteCanaisIA, getSummary)
+- [x] Canais & Rotas: página com 4 abas (Campanhas, Rotas, Diário de Bordo, Canais IA)
+- [x] Canais & Rotas: popular banco com 46 campanhas + 11 rotas + 3 células IA do xlsx
+- [x] Canais & Rotas: adicionar no menu lateral do DDM Control Desk

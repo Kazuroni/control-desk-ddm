@@ -1,4 +1,5 @@
 import { COOKIE_NAME } from "@shared/const";
+import { canaisRotasRouter } from "./routers/canaisRotas";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
@@ -61,6 +62,7 @@ function timeToSeconds(t: string | null | undefined): number {
 
 export const appRouter = router({
   system: systemRouter,
+  canaisRotas: canaisRotasRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

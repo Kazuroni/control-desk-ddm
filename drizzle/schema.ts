@@ -158,3 +158,65 @@ export const dimensionamento = mysqlTable("dimensionamento", {
 
 export type Dimensionamento = typeof dimensionamento.$inferSelect;
 export type InsertDimensionamento = typeof dimensionamento.$inferInsert;
+
+// ─── Canais & Rotas ────────────────────────────────────────────────────────────
+
+// Campanhas com seus canais alocados e rota cadastrada
+export const canaisRotasCampanhas = mysqlTable("canais_rotas_campanhas", {
+  id: int("id").autoincrement().primaryKey(),
+  campanha: varchar("campanha", { length: 255 }).notNull(),
+  ativo: varchar("ativo", { length: 16 }).default("Sim"), // Sim / Não / -
+  solicitado: int("solicitado").default(0),
+  alocado: int("alocado").default(0),
+  saldo: int("saldo").default(0), // solicitado - alocado
+  rotaCadastrada: varchar("rotaCadastrada", { length: 128 }),
+  observacao: text("observacao"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CanaisRotasCampanha = typeof canaisRotasCampanhas.$inferSelect;
+export type InsertCanaisRotasCampanha = typeof canaisRotasCampanhas.$inferInsert;
+
+// Rotas disponíveis com qualidade, custo e quantidade de canais
+export const canaisRotasRotas = mysqlTable("canais_rotas_rotas", {
+  id: int("id").autoincrement().primaryKey(),
+  nome: varchar("nome", { length: 128 }).notNull(),
+  quantidadeCanais: int("quantidadeCanais").default(0),
+  qualidade: varchar("qualidade", { length: 32 }), // ALTA / MÉDIA / BAIXA
+  custo: varchar("custo", { length: 64 }), // ELEVADO / MUITO ELEVADO / BAIXO / MUITO BAIXO
+  limite: varchar("limite", { length: 32 }),
+  observacao: text("observacao"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CanaisRotasRota = typeof canaisRotasRotas.$inferSelect;
+export type InsertCanaisRotasRota = typeof canaisRotasRotas.$inferInsert;
+
+// Diário de bordo — histórico de movimentações de rotas
+export const canaisRotasDiario = mysqlTable("canais_rotas_diario", {
+  id: int("id").autoincrement().primaryKey(),
+  data: varchar("data", { length: 32 }), // ISO string
+  rota: varchar("rota", { length: 128 }),
+  movimentacao: text("movimentacao"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type CanaisRotasDiario = typeof canaisRotasDiario.$inferSelect;
+export type InsertCanaisRotasDiario = typeof canaisRotasDiario.$inferInsert;
+
+// Canais IA — células com canais de IA e fluxos
+export const canaisRotasIA = mysqlTable("canais_rotas_ia", {
+  id: int("id").autoincrement().primaryKey(),
+  celula: varchar("celula", { length: 255 }).notNull(),
+  qtdCanais: int("qtdCanais").default(0),
+  canaisName: text("canaisName"),
+  qtdFluxo: int("qtdFluxo").default(0),
+  fluxosName: text("fluxosName"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CanaisRotasIA = typeof canaisRotasIA.$inferSelect;
+export type InsertCanaisRotasIA = typeof canaisRotasIA.$inferInsert;

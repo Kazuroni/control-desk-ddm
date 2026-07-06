@@ -9,9 +9,10 @@ import ReasonAgentPage from "./ReasonAgentPage";
 import CampaignAgentPage from "./CampaignAgentPage";
 import DispositionAgentPage from "./DispositionAgentPage";
 import DimensionamentoPage from "./DimensionamentoPage";
+import CanaisRotasPage from "./CanaisRotas";
 import {
   Upload, Activity, PauseCircle, BarChart3, AlertTriangle,
-  ChevronLeft, ChevronRight, Trophy, Users
+  ChevronLeft, ChevronRight, Trophy, Users, Network
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { id: "campaignagent", label: "Performance por Célula/Campanha", icon: BarChart3, badge: "CampaignAgent", color: "text-emerald-400" },
   { id: "dispositionagent", label: "Tabulações Excedidas", icon: AlertTriangle, badge: "DispositionAgent", color: "text-red-400" },
   { id: "dimensionamento", label: "Dimensionamento", icon: Users, badge: null, color: "text-purple-400" },
+  { id: "canaisrotas", label: "Canais & Rotas", icon: Network, badge: null, color: "text-cyan-400" },
 ];
 
 export default function Home() {
@@ -178,6 +180,7 @@ export default function Home() {
           {activeSection === "campaignagent" && <CampaignAgentPage />}
           {activeSection === "dispositionagent" && <DispositionAgentPage />}
           {activeSection === "dimensionamento" && <DimensionamentoPage />}
+          {activeSection === "canaisrotas" && <CanaisRotasPage />}
         </main>
       </div>
 
