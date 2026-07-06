@@ -108,6 +108,81 @@ function RankingCard({
   );
 }
 
+// Card dedicado para Tabulações Excedidas com campos extras
+interface TabulacaoItem {
+  agente: string;
+  valor: number;
+  totalChamadas?: number;
+  tempoTabulado?: string;
+  supervisor?: string;
+}
+function TabulacoesCard({
+  title, subtitle, items, totalGeral,
+}: {
+  title: string; subtitle: string; items: TabulacaoItem[]; totalGeral?: number;
+}) {
+  const maxVal = Math.max(...items.map(i => i.valor), 1);
+  return (
+    <div className="rounded-2xl border border-violet-500/30 overflow-hidden flex flex-col">
+      <div className="bg-violet-500/10 px-6 py-4 flex items-center gap-3 shrink-0">
+        <span className="text-violet-400 w-6 h-6">🚨</span>
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-bold text-white leading-tight">{title}</p>
+          <p className="text-xs text-white/45 leading-tight mt-1">{subtitle}</p>
+        </div>
+        {totalGeral !== undefined && (
+          <div className="shrink-0 text-right">
+            <p className="text-2xl font-black text-violet-300 tabular-nums">{totalGeral}</p>
+            <p className="text-xs text-white/35">total excedidas</p>
+          </div>
+        )}
+      </div>
+      <div className="px-6 py-4 space-y-4 bg-[#0f1117] flex-1">
+        {items.length === 0 ? (
+          <p className="text-sm text-white/25 text-center py-4">Sem dados disponíveis</p>
+        ) : items.map((item, idx) => {
+          const pct = Math.round((item.valor / maxVal) * 100);
+          return (
+            <div key={idx} className="space-y-2">
+              <div className="flex items-start gap-3">
+                <span className={`text-base font-black w-7 text-right shrink-0 mt-0.5 ${idx === 0 ? "text-violet-300" : "text-white/35"}`}>
+                  {idx + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-base text-white font-semibold leading-snug break-words">{item.agente}</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <span className="text-xs px-2.5 py-1 rounded-lg font-medium bg-violet-500/15 text-violet-300">
+                      {item.valor} ocorr.
+                    </span>
+                    {item.totalChamadas !== undefined && (
+                      <span className="text-xs px-2.5 py-1 rounded-lg font-medium bg-blue-500/15 text-blue-300">
+                        {item.totalChamadas} ch.
+                      </span>
+                    )}
+                    {item.tempoTabulado && (
+                      <span className="text-xs px-2.5 py-1 rounded-lg font-medium bg-amber-500/15 text-amber-300">
+                        ⏱ {item.tempoTabulado}
+                      </span>
+                    )}
+                    {item.supervisor && item.supervisor !== "—" && (
+                      <span className="text-xs px-2.5 py-1 rounded-lg font-medium bg-white/5 text-white/50">
+                        Sup: {item.supervisor}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden ml-10">
+                <div className="h-full bg-violet-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // Card de resumo de quartil
 function QuartilCard({
   label, count, avg, metric, color, bg, border,
@@ -446,13 +521,11 @@ export default function ExecutiveReportModal({ open, onClose }: Props) {
                       <p className="text-xs font-semibold text-white/25 uppercase tracking-widest mb-4">
                         ④ Tabulações Excedidas
                       </p>
-                      <RankingCard
+                      <TabulacoesCard
                         title="🚨 Top 5 Tabulações Excedidas"
-                        subtitle="Maior número de ocorrências de tempo excedido — nome completo do agente e total de ocorrências"
-                        items={data?.top5Tabulacoes ?? []}
-                        variant="violet"
-                        icon={<AlertTriangle className="w-5 h-5" />}
-                        formatValue={v => `${v} ocorr.`}
+                        subtitle="Ocorrências + total de chamadas + tempo tabulado + supervisor responsável"
+                        items={(data?.top5Tabulacoes ?? []) as TabulacaoItem[]}
+                        totalGeral={data?.totalTabulacoesExcedidas}
                       />
                     </div>
                   </>

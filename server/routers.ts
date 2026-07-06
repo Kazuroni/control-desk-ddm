@@ -237,6 +237,16 @@ export const appRouter = router({
           agente: input.agente,
         });
 
+        // Carrega dimensionamento para cruzar turno
+        const dimMap = loadDimensionamento();
+        function getTurnoAgente(agente: string): string {
+          const key = agente.toLowerCase().trim();
+          for (const [k, v] of Object.entries(dimMap)) {
+            if (k === key) return v.turno || "";
+          }
+          return "";
+        }
+
         // Limites NR17 (obrigatórios) e outros
         const PAUSE_LIMITS: Record<string, number> = {
           "descanso 1": 10 * 60,
@@ -290,7 +300,7 @@ export const appRouter = router({
         // NR17: por agente + motivo NR17 (para ver quem estourou cada pausa obrigatória)
         const byAgenteNR17: Record<string, {
           agente: string; motivo: string; totalSegundos: number; totalPausas: number;
-          limiteSegundos: number; excedeuLimite: boolean; excedidoSegundos: number;
+          limiteSegundos: number; excedeuLimite: boolean; excedidoSegundos: number; turno: string;
         }> = {};
 
         // Banheiro: por agente (tempo total + ocorrências)
@@ -345,7 +355,7 @@ export const appRouter = router({
           // NR17
           if (categoria === "nr17" && limite !== null) {
             const nr17Key = `${agente}||${motivo}`;
-            if (!byAgenteNR17[nr17Key]) byAgenteNR17[nr17Key] = { agente, motivo, totalSegundos: 0, totalPausas: 0, limiteSegundos: limite, excedeuLimite: false, excedidoSegundos: 0 };
+            if (!byAgenteNR17[nr17Key]) byAgenteNR17[nr17Key] = { agente, motivo, totalSegundos: 0, totalPausas: 0, limiteSegundos: limite, excedeuLimite: false, excedidoSegundos: 0, turno: getTurnoAgente(agente) };
             byAgenteNR17[nr17Key].totalSegundos += segundos;
             byAgenteNR17[nr17Key].totalPausas += pausas;
             if (excedeu) { byAgenteNR17[nr17Key].excedeuLimite = true; byAgenteNR17[nr17Key].excedidoSegundos += excedidoSeg; }
@@ -717,21 +727,26 @@ export const appRouter = router({
 
         // ── Faixa 4: Top 5 por tabulações excedidas ────────────────────────────
         // Agrega por agente com mesma lógica do getDispositionAgent
-        const byAgenteDisp: Record<string, { agente: string; ocorrencias: number; totalSegundos: number; supervisor: string }> = {};
+        const byAgenteDisp: Record<string, { agente: string; ocorrencias: number; totalSegundos: number; totalChamadas: number; supervisor: string }> = {};
         for (const row of dispositionRows) {
           const agente = row.agente || "Desconhecido";
           const seg = timeToSeconds(row.tempoTabulacao);
-          if (!byAgenteDisp[agente]) byAgenteDisp[agente] = { agente, ocorrencias: 0, totalSegundos: 0, supervisor: row.nomeSupervisor || "" };
+          const chamadas = row.totalChamadas || 0;
+          if (!byAgenteDisp[agente]) byAgenteDisp[agente] = { agente, ocorrencias: 0, totalSegundos: 0, totalChamadas: 0, supervisor: row.nomeSupervisor || "" };
           byAgenteDisp[agente].ocorrencias += 1;
           byAgenteDisp[agente].totalSegundos += seg;
+          byAgenteDisp[agente].totalChamadas += chamadas;
         }
+        const totalTabulacoesExcedidasExec = Object.values(byAgenteDisp).reduce((s, r) => s + r.ocorrencias, 0);
         const top5Tabulacoes = Object.values(byAgenteDisp)
           .sort((a, b) => b.ocorrencias - a.ocorrencias)
           .slice(0, 5)
           .map(r => ({
             agente: r.agente,
             valor: r.ocorrencias,
-            detalhe: `Sup: ${r.supervisor || "—"}`,
+            totalChamadas: r.totalChamadas,
+            tempoTabulado: secToHMS(r.totalSegundos),
+            supervisor: r.supervisor || "—",
           }));
 
         return {
@@ -740,6 +755,7 @@ export const appRouter = router({
           top5Pausas,
           top5Campanhas,
           top5Tabulacoes,
+          totalTabulacoesExcedidas: totalTabulacoesExcedidasExec,
         };
       }),
 

@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
-import NR17ReportModal from "@/components/NR17ReportModal";
+import { NR17ReportModal } from "@/components/NR17ReportModal";
 
 const COLORS_IMPROD = ["#f97316", "#ef4444", "#f59e0b", "#eab308", "#fb923c"];
 const COLORS_GERAL = [
@@ -300,7 +300,7 @@ export default function ReasonAgentPage() {
             <MoreHorizontal className="w-3.5 h-3.5 text-violet-400" /> Outros
           </TabsTrigger>
           <TabsTrigger value="abusadores" className="gap-1.5 text-xs">
-            <Flame className="w-3.5 h-3.5 text-red-400" /> Abusadores
+            <Flame className="w-3.5 h-3.5 text-red-400" /> Ofensores
           </TabsTrigger>
         </TabsList>
 
@@ -313,7 +313,7 @@ export default function ReasonAgentPage() {
               { label: "Total de Motivos", value: motivoChart.length, color: "text-blue-400", icon: <Activity className="w-4 h-4" /> },
               { label: "Motivos Improdutivos", value: motivoImprodChart.length, color: "text-red-400", icon: <AlertTriangle className="w-4 h-4" /> },
               { label: "Agentes com Pausa Improd.", value: agenteRanking.length, color: "text-amber-400", icon: <Clock className="w-4 h-4" /> },
-              { label: "Abusadores de Limite", value: abusadoresPausa.length, color: "text-red-500", icon: <Flame className="w-4 h-4" /> },
+              { label: "Ofensores de Limite", value: abusadoresPausa.length, color: "text-red-500", icon: <Flame className="w-4 h-4" /> },
             ].map(card => (
               <div key={card.label} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
                 <div className={`${card.color} opacity-70`}>{card.icon}</div>
@@ -731,9 +731,9 @@ export default function ReasonAgentPage() {
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex gap-3">
             <Flame className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-red-400">Dashboard de Abusadores de Pausa</p>
+              <p className="text-sm font-semibold text-red-400">Top 15 Ofensores de Pausa</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Agentes que ultrapassaram o limite de qualquer pausa com limite definido. Qualquer segundo acima do limite é contabilizado.
+                Agentes que ultrapassaram o limite de qualquer pausa com limite definido. Clique nos cabeçalhos para ordenar.
               </p>
             </div>
           </div>
@@ -755,76 +755,99 @@ export default function ReasonAgentPage() {
             </Select>
           </div>
 
-          {/* Tabela de abusadores */}
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    <th className="px-3 py-3 text-left text-muted-foreground font-semibold uppercase tracking-wider">#</th>
-                    <th className="px-3 py-3 text-left text-muted-foreground font-semibold uppercase tracking-wider">Agente</th>
-                    <th className="px-3 py-3 text-left text-muted-foreground font-semibold uppercase tracking-wider">Motivo</th>
-                    <th className="px-3 py-3 text-center text-muted-foreground font-semibold uppercase tracking-wider">Limite</th>
-                    <th className="px-3 py-3 text-right text-muted-foreground font-semibold uppercase tracking-wider">Tempo Usado</th>
-                    <th className="px-3 py-3 text-right text-muted-foreground font-semibold uppercase tracking-wider">Excedeu</th>
-                    <th className="px-3 py-3 text-right text-muted-foreground font-semibold uppercase tracking-wider">Nº Pausas</th>
-                    <th className="px-3 py-3 text-center text-muted-foreground font-semibold uppercase tracking-wider">Gravidade</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isLoading ? (
-                    Array.from({ length: 8 }).map((_, i) => (
-                      <tr key={i} className="border-b border-border/50">
-                        {Array.from({ length: 8 }).map((_, j) => (
-                          <td key={j} className="px-3 py-3"><Skeleton className="h-4 w-full" /></td>
-                        ))}
+          {/* Tabela de ofensores com ordenação interativa */}
+          {(() => {
+            const [sortCol, setSortCol] = useState<string>("excedidoSegundos");
+            const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
+            const toggleSort = (col: string) => {
+              if (sortCol === col) setSortDir(d => d === "desc" ? "asc" : "desc");
+              else { setSortCol(col); setSortDir("desc"); }
+            };
+            const sorted = [...abusadoresFiltrados].sort((a: any, b: any) => {
+              const va = a[sortCol] ?? 0;
+              const vb = b[sortCol] ?? 0;
+              return sortDir === "desc" ? vb - va : va - vb;
+            }).slice(0, 15);
+            const SortTh = ({ col, label, align = "right" }: { col: string; label: string; align?: string }) => (
+              <th
+                className={`px-3 py-3 text-${align} text-muted-foreground font-semibold uppercase tracking-wider cursor-pointer hover:text-foreground select-none`}
+                onClick={() => toggleSort(col)}
+              >
+                {label} {sortCol === col ? (sortDir === "desc" ? "↓" : "↑") : "↕"}
+              </th>
+            );
+            return (
+              <div className="bg-card border border-border rounded-xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="px-3 py-3 text-left text-muted-foreground font-semibold uppercase tracking-wider">#</th>
+                        <th className="px-3 py-3 text-left text-muted-foreground font-semibold uppercase tracking-wider">Agente</th>
+                        <th className="px-3 py-3 text-left text-muted-foreground font-semibold uppercase tracking-wider">Motivo</th>
+                        <th className="px-3 py-3 text-center text-muted-foreground font-semibold uppercase tracking-wider">Limite</th>
+                        <SortTh col="totalSegundos" label="Tempo Usado" />
+                        <SortTh col="excedidoSegundos" label="Excedeu" />
+                        <SortTh col="totalPausas" label="Nº Pausas" />
+                        <th className="px-3 py-3 text-center text-muted-foreground font-semibold uppercase tracking-wider">Gravidade</th>
                       </tr>
-                    ))
-                  ) : abusadoresFiltrados.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
-                        Nenhum abusador encontrado com os filtros selecionados.
-                      </td>
-                    </tr>
-                  ) : (
-                    abusadoresFiltrados.map((r: any, i: number) => {
-                      const excedeuMin = Math.floor(r.excedidoSegundos / 60);
-                      const excedeuSec = r.excedidoSegundos % 60;
-                      const limiteMin = r.limiteSegundos ? Math.round(r.limiteSegundos / 60) : null;
-                      const pctExcesso = r.limiteSegundos ? Math.round((r.excedidoSegundos / r.limiteSegundos) * 100) : 0;
-                      const gravidade = pctExcesso > 50 ? { label: "Crítico", cls: "bg-red-500/20 text-red-400" }
-                        : pctExcesso > 20 ? { label: "Alerta", cls: "bg-amber-500/20 text-amber-400" }
-                        : { label: "Atenção", cls: "bg-yellow-500/20 text-yellow-400" };
-                      return (
-                        <tr key={`${r.agente}-${r.motivo}`} className="border-b border-border/50 hover:bg-accent/20">
-                          <td className="px-3 py-2.5 text-muted-foreground">{i + 1}</td>
-                          <td className="px-3 py-2.5 font-medium text-foreground">{r.agente}</td>
-                          <td className="px-3 py-2.5">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/10 text-primary">{r.motivo}</span>
-                          </td>
-                          <td className="px-3 py-2.5 text-center text-muted-foreground font-mono">
-                            {limiteMin !== null ? `${limiteMin} min` : "—"}
-                          </td>
-                          <td className="px-3 py-2.5 text-right font-mono font-semibold text-foreground">
-                            {secondsToHMS(r.totalSegundos)}
-                          </td>
-                          <td className="px-3 py-2.5 text-right font-mono font-semibold text-red-400">
-                            +{excedeuMin}min {String(excedeuSec).padStart(2, "0")}s
-                          </td>
-                          <td className="px-3 py-2.5 text-right text-muted-foreground">{r.totalPausas}x</td>
-                          <td className="px-3 py-2.5 text-center">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${gravidade.cls}`}>
-                              {gravidade.label}
-                            </span>
+                    </thead>
+                    <tbody>
+                      {isLoading ? (
+                        Array.from({ length: 8 }).map((_, i) => (
+                          <tr key={i} className="border-b border-border/50">
+                            {Array.from({ length: 8 }).map((_, j) => (
+                              <td key={j} className="px-3 py-3"><Skeleton className="h-4 w-full" /></td>
+                            ))}
+                          </tr>
+                        ))
+                      ) : sorted.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                            Nenhum ofensor encontrado com os filtros selecionados.
                           </td>
                         </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                      ) : (
+                        sorted.map((r: any, i: number) => {
+                          const excedeuMin = Math.floor(r.excedidoSegundos / 60);
+                          const excedeuSec = r.excedidoSegundos % 60;
+                          const limiteMin = r.limiteSegundos ? Math.round(r.limiteSegundos / 60) : null;
+                          const pctExcesso = r.limiteSegundos ? Math.round((r.excedidoSegundos / r.limiteSegundos) * 100) : 0;
+                          const gravidade = pctExcesso > 50 ? { label: "Crítico", cls: "bg-red-500/20 text-red-400" }
+                            : pctExcesso > 20 ? { label: "Alerta", cls: "bg-amber-500/20 text-amber-400" }
+                            : { label: "Atenção", cls: "bg-yellow-500/20 text-yellow-400" };
+                          return (
+                            <tr key={`${r.agente}-${r.motivo}`} className="border-b border-border/50 hover:bg-accent/20">
+                              <td className="px-3 py-2.5 text-muted-foreground">{i + 1}</td>
+                              <td className="px-3 py-2.5 font-medium text-foreground">{r.agente}</td>
+                              <td className="px-3 py-2.5">
+                                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/10 text-primary">{r.motivo}</span>
+                              </td>
+                              <td className="px-3 py-2.5 text-center text-muted-foreground font-mono">
+                                {limiteMin !== null ? `${limiteMin} min` : "—"}
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-mono font-semibold text-foreground">
+                                {secondsToHMS(r.totalSegundos)}
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-mono font-semibold text-red-400">
+                                +{excedeuMin}min {String(excedeuSec).padStart(2, "0")}s
+                              </td>
+                              <td className="px-3 py-2.5 text-right text-muted-foreground">{r.totalPausas}x</td>
+                              <td className="px-3 py-2.5 text-center">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${gravidade.cls}`}>
+                                  {gravidade.label}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
           </div>{/* /refAbusadoresTab */}
         </TabsContent>
       </Tabs>
@@ -833,9 +856,8 @@ export default function ReasonAgentPage() {
       <NR17ReportModal
         open={showNR17Report}
         onClose={() => setShowNR17Report(false)}
-        nr17Abusadores={data?.nr17Abusadores ?? []}
-        nr17Todos={data?.nr17Todos ?? []}
-        selectedDate={selectedDate}
+        nr17Abusadores={(data as any)?.nr17Abusadores ?? []}
+        referenceDate={selectedDate || undefined}
       />
     </div>
   );
