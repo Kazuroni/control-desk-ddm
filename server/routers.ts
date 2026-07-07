@@ -31,25 +31,20 @@ import {
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 
-// Carrega o dimensionamento (mapeamento agente -> turno/célula/skill)
-function loadDimensionamento(): Record<string, { turno: string; celula: string; skill: string; supervisor: string; entrada: string; saida: string; uf: string }> {
-  const dimPath = join(process.cwd(), "dimensionamento.json");
-  if (!existsSync(dimPath)) return {};
-  try {
-    const data = JSON.parse(readFileSync(dimPath, "utf-8"));
-    const map: Record<string, any> = {};
-    for (const a of data.agents || []) {
-      if (a.nome) {
-        const key = a.nome.trim().toUpperCase();
-        map[key] = { turno: a.turno || "", celula: a.celula || "", skill: a.skill || "", supervisor: a.supervisor || "", entrada: a.entrada || "", saida: a.saida || "", uf: a.uf || "" };
-      }
-      if (a.login) {
-        const loginKey = `LOGIN:${a.login.trim().toLowerCase()}`;
-        map[loginKey] = { turno: a.turno || "", celula: a.celula || "", skill: a.skill || "", supervisor: a.supervisor || "", entrada: a.entrada || "", saida: a.saida || "", uf: a.uf || "" };
-      }
+// Constrói mapa de dimensionamento a partir de um array de registros do banco
+function buildDimMap(dimRows: any[]): Record<string, { turno: string; celula: string; skill: string; supervisor: string; entrada: string; saida: string; uf: string }> {
+  const map: Record<string, any> = {};
+  for (const a of dimRows) {
+    if (a.nome) {
+      const key = a.nome.trim().toUpperCase();
+      map[key] = { turno: a.turno || "", celula: a.celula || "", skill: a.skill || "", supervisor: a.supervisor || "", entrada: a.entrada || "", saida: a.saida || "", uf: a.uf || "" };
     }
-    return map;
-  } catch { return {}; }
+    if (a.login) {
+      const loginKey = `LOGIN:${a.login.trim().toLowerCase()}`;
+      map[loginKey] = { turno: a.turno || "", celula: a.celula || "", skill: a.skill || "", supervisor: a.supervisor || "", entrada: a.entrada || "", saida: a.saida || "", uf: a.uf || "" };
+    }
+  }
+  return map;
 }
 
 // Helper para converter tempo HH:MM:SS em segundos
@@ -142,13 +137,15 @@ export const appRouter = router({
         supervisor: z.string().optional(),
       }))
       .query(async ({ input }) => {
-        const rows = await getAgentDayRecords({
-          sessionIds: input.sessionIds,
-          agente: input.agente,
-          uf: input.uf,
-        });
-
-        const dimMap = loadDimensionamento();
+                const [rows, dimRows] = await Promise.all([
+          getAgentDayRecords({
+            sessionIds: input.sessionIds,
+            agente: input.agente,
+            uf: input.uf,
+          }),
+          getDimensionamento({}),
+        ]);
+        const dimMap = buildDimMap(dimRows);
 
         // Enriquece cada linha com métricas calculadas e dados do dimensionamento
         const enriched = rows.map(row => {
@@ -239,14 +236,13 @@ export const appRouter = router({
           agente: input.agente,
         });
 
-        // Carrega dimensionamento para cruzar turno
-        const dimMap = loadDimensionamento();
+        // Carrega dimensionamento do banco para cruzar turno
+        const dimRowsNR17 = await getDimensionamento({});
+        const dimMapNR17 = buildDimMap(dimRowsNR17);
         function getTurnoAgente(agente: string): string {
-          const key = agente.toLowerCase().trim();
-          for (const [k, v] of Object.entries(dimMap)) {
-            if (k === key) return v.turno || "";
-          }
-          return "";
+          const nomeKey = agente.trim().toUpperCase();
+          const loginKey = `LOGIN:${agente.trim().toLowerCase()}`;
+          return dimMapNR17[nomeKey]?.turno || dimMapNR17[loginKey]?.turno || "";
         }
 
         // Limites NR17 (obrigatórios) e outros

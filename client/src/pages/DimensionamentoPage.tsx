@@ -489,9 +489,13 @@ export default function DimensionamentoPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Erro desconhecido");
       setImportResult(json);
+      // Invalida dimensionamento E o AgentDay (que agora lê o banco para enriquecer turno/célula/supervisor)
       utils.dimensionamento.list.invalidate();
       utils.dimensionamento.stats.invalidate();
-      toast.success(`Importação concluída: ${json.inserted} inseridos, ${json.updated} atualizados`);
+      utils.dimensionamento.crossCheck.invalidate();
+      utils.dashboard.getAgentDay.invalidate();
+      utils.dashboard.getReasonAgent.invalidate();
+      toast.success(`Importação concluída: ${json.inserted} inseridos, ${json.updated} atualizados — Performance em Tempo Real atualizada!`);
     } catch (e: any) {
       toast.error("Erro na importação: " + e.message);
     } finally {
