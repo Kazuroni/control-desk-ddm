@@ -128,17 +128,34 @@ function CrossCheckTab() {
   async function addSelectedInBatch() {
     const toAdd = naoFiltrado.filter((_, i) => selectedIds.has(i));
     if (toAdd.length === 0) return;
+    const toastId = toast.loading(`Adicionando ${toAdd.length} operador(es)...`);
+    let ok = 0;
+    let fail = 0;
     for (const a of toAdd) {
-      await createMutation.mutateAsync({
-        nome: a.agente,
-        login: a.login || undefined,
-        uf: a.uf || undefined,
-        celula: a.campanha || undefined,
-        status: "ATIVO",
-      }).catch(() => {});
+      try {
+        await createMutation.mutateAsync({
+          nome: a.agente,
+          login: a.login || undefined,
+          uf: a.uf || undefined,
+          celula: a.campanha || undefined,
+          status: "ATIVO",
+        });
+        ok++;
+      } catch {
+        fail++;
+      }
     }
     setSelectedIds(new Set());
-    toast.success(`${toAdd.length} operador(es) adicionado(s) ao dimensionamento!`);
+    // Atualiza todas as listas automaticamente
+    utils.dimensionamento.list.invalidate();
+    utils.dimensionamento.stats.invalidate();
+    utils.dimensionamento.crossCheck.invalidate();
+    toast.dismiss(toastId);
+    if (fail === 0) {
+      toast.success(`✓ ${ok} operador(es) adicionado(s) ao dimensionamento com sucesso!`, { duration: 4000 });
+    } else {
+      toast.warning(`${ok} adicionado(s), ${fail} com erro. Verifique duplicatas.`, { duration: 5000 });
+    }
   }
 
   if (isLoading) {

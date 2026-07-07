@@ -312,6 +312,8 @@ function CampanhasTab() {
 function RotasTab() {
   const utils = trpc.useUtils();
   const { data: rotas = [], isLoading } = trpc.canaisRotas.getRotas.useQuery();
+  // Campanhas para calcular canais em uso por rota
+  const { data: campanhas = [] } = trpc.canaisRotas.getCampanhas.useQuery();
   const upsert = trpc.canaisRotas.upsertRota.useMutation({
     onSuccess: () => { utils.canaisRotas.getRotas.invalidate(); utils.canaisRotas.getSummary.invalidate(); toast.success("Rota salva!"); setModalOpen(false); },
     onError: (e) => toast.error(e.message),
@@ -325,6 +327,16 @@ function RotasTab() {
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ nome: "", quantidadeCanais: 0, qualidade: "", custo: "", limite: "", observacao: "" });
 
+  // Canais em uso por rota (soma dos alocados das campanhas)
+  const canaisEmUsoPorRota = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of campanhas) {
+      if (!c.rotaCadastrada) continue;
+      map.set(c.rotaCadastrada, (map.get(c.rotaCadastrada) ?? 0) + (c.alocado ?? 0));
+    }
+    return map;
+  }, [campanhas]);
+
   function openNew() { setEditing(null); setForm({ nome: "", quantidadeCanais: 0, qualidade: "", custo: "", limite: "", observacao: "" }); setModalOpen(true); }
   function openEdit(r: any) { setEditing(r); setForm({ nome: r.nome, quantidadeCanais: r.quantidadeCanais ?? 0, qualidade: r.qualidade ?? "", custo: r.custo ?? "", limite: r.limite ?? "", observacao: r.observacao ?? "" }); setModalOpen(true); }
   function handleSave() {
@@ -332,14 +344,17 @@ function RotasTab() {
   }
 
   const totalCanais = rotas.reduce((s, r) => s + (r.quantidadeCanais ?? 0), 0);
+  const totalEmUso = Array.from(canaisEmUsoPorRota.values()).reduce((s, v) => s + v, 0);
+  const totalLivres = Math.max(0, totalCanais - totalEmUso);
 
   return (
     <div>
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-4 gap-4 mb-6">
         <KpiCard label="Rotas Cadastradas" value={rotas.length} icon={<Network className="w-5 h-5 text-orange-400" />} color="border-orange-500/20 bg-orange-500/5" />
-        <KpiCard label="Total de Canais" value={totalCanais} sub="Soma de todos os canais" icon={<Radio className="w-5 h-5 text-blue-400" />} color="border-blue-500/20 bg-blue-500/5" />
-        <KpiCard label="Canais Livres" value={totalCanais - 724 < 0 ? 724 - totalCanais : 0} sub="Estimativa (base 724)" icon={<TrendingUp className="w-5 h-5 text-emerald-400" />} color="border-emerald-500/20 bg-emerald-500/5" />
+        <KpiCard label="Total de Canais" value={totalCanais} sub="Soma de todos os telecoms" icon={<Radio className="w-5 h-5 text-blue-400" />} color="border-blue-500/20 bg-blue-500/5" />
+        <KpiCard label="Canais em Uso" value={totalEmUso} sub={`${totalCanais > 0 ? Math.round(totalEmUso / totalCanais * 100) : 0}% da capacidade`} icon={<TrendingUp className="w-5 h-5 text-amber-400" />} color="border-amber-500/20 bg-amber-500/5" />
+        <KpiCard label="Canais Livres" value={totalLivres} sub={totalLivres === 0 ? "Capacidade máxima" : "Disponíveis"} icon={<TrendingDown className="w-5 h-5 text-emerald-400" />} color={`border-emerald-500/20 ${totalLivres === 0 ? "bg-red-500/5" : "bg-emerald-500/5"}`} />
       </div>
 
       <div className="flex justify-end mb-4">
@@ -357,26 +372,51 @@ function RotasTab() {
         <p className="text-center py-12 text-white/30">Nenhuma rota cadastrada.</p>
       ) : (
         <div className="grid grid-cols-3 gap-4">
-          {rotas.map(r => (
-            <div key={r.id} className="rounded-xl border border-white/8 bg-white/3 p-5 flex flex-col gap-3 hover:border-white/15 transition-colors">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-white font-bold text-base">{r.nome}</p>
-                  <p className="text-white/40 text-xs mt-0.5">{r.quantidadeCanais ?? 0} canais</p>
+          {rotas.map(r => {
+            const total = r.quantidadeCanais ?? 0;
+            const emUso = canaisEmUsoPorRota.get(r.nome) ?? 0;
+            const livres = Math.max(0, total - emUso);
+            const pct = total > 0 ? Math.min(100, Math.round(emUso / total * 100)) : 0;
+            const overloaded = emUso > total && total > 0;
+            const barColor = overloaded ? 'bg-red-500' : pct > 85 ? 'bg-amber-500' : pct > 50 ? 'bg-blue-500' : 'bg-emerald-500';
+            return (
+              <div key={r.id} className={`rounded-xl border p-5 flex flex-col gap-3 hover:border-white/15 transition-colors ${
+                overloaded ? 'border-red-500/40 bg-red-500/5' : 'border-white/8 bg-white/3'
+              }`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-bold text-base">{r.nome}</p>
+                    {/* Barra de uso */}
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-white/40">{emUso} em uso / {total} total</span>
+                        <span className={`font-semibold ${
+                          overloaded ? 'text-red-400' : livres === 0 && total > 0 ? 'text-amber-400' : 'text-emerald-400'
+                        }`}>
+                          {overloaded ? `+${emUso - total} acima` : total === 0 ? 'N/A' : `${livres} livres`}
+                        </span>
+                      </div>
+                      {total > 0 && (
+                        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { if (confirm(`Remover "${r.nome}"?`)) del.mutate({ id: r.id }); }} className="p-1.5 rounded hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
                 </div>
-                <div className="flex gap-1.5 shrink-0">
-                  <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => { if (confirm(`Remover "${r.nome}"?`)) del.mutate({ id: r.id }); }} className="p-1.5 rounded hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                <div className="flex flex-wrap gap-2">
+                  {qualidadeBadge(r.qualidade)}
+                  {custoBadge(r.custo)}
+                  {r.limite && <span className="text-xs px-2 py-0.5 rounded-full border border-white/10 text-white/40">Limite: {r.limite}</span>}
                 </div>
+                {r.observacao && <p className="text-xs text-white/40 leading-relaxed border-t border-white/5 pt-2">{r.observacao}</p>}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {qualidadeBadge(r.qualidade)}
-                {custoBadge(r.custo)}
-                {r.limite && <span className="text-xs px-2 py-0.5 rounded-full border border-white/10 text-white/40">Limite: {r.limite}</span>}
-              </div>
-              {r.observacao && <p className="text-xs text-white/40 leading-relaxed border-t border-white/5 pt-2">{r.observacao}</p>}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
