@@ -20,7 +20,10 @@ import {
   insertDimensionamento,
   updateDimensionamento,
   deleteDimensionamento,
+  getDb,
 } from "./db";
+import { dimensionamento } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 import {
   detectReportType,
   parseAgentDay,
@@ -903,6 +906,85 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         await deleteDimensionamento(input.id);
         return { success: true };
+      }),
+    // Sincronização automática: cruza AgentDay com Dimensionamento e adiciona quem já existe no banco
+    syncAgentDay: publicProcedure
+      .input(z.object({ sessionIds: z.array(z.number()).optional() }))
+      .mutation(async ({ input }) => {
+        const [agentRows, dimRows] = await Promise.all([
+          getAgentDayRecords({ sessionIds: input.sessionIds }),
+          getDimensionamento({}),
+        ]);
+        // Mapas de lookup do dimensionamento
+        const dimNomes = new Map<string, number>(); // nome_upper -> id
+        const dimLogins = new Map<string, number>(); // login_lower -> id
+        for (const d of dimRows) {
+          if (d.nome) dimNomes.set(d.nome.trim().toUpperCase(), d.id);
+          if (d.login) dimLogins.set(d.login.trim().toLowerCase(), d.id);
+        }
+        // Agentes únicos do AgentDay
+        const agentesMap = new Map<string, { agente: string; login: string; campanha: string; uf: string }>();
+        for (const row of agentRows) {
+          const nome = (row.agente || "").trim();
+          if (!nome) continue;
+          if (!agentesMap.has(nome)) {
+            agentesMap.set(nome, {
+              agente: nome,
+              login: row.login || "",
+              campanha: row.produto || "",
+              uf: row.uf || "",
+            });
+          }
+        }
+        // Separa em: já no dim, encontrado no banco por login/nome (de-para), totalmente novo
+        const autoAdded: string[] = [];
+        const stillMissing: { agente: string; login: string; campanha: string; uf: string }[] = [];
+        for (const a of Array.from(agentesMap.values())) {
+          const nomeUp = a.agente.toUpperCase();
+          const loginLow = a.login.toLowerCase();
+          // Já cadastrado pelo nome
+          if (dimNomes.has(nomeUp)) continue;
+          // Já cadastrado pelo login
+          if (loginLow && dimLogins.has(loginLow)) continue;
+          // De-para: busca no banco por login (pode ter nome diferente)
+          if (loginLow) {
+            // Busca por login exato no banco
+            const db = await getDb();
+            if (db) {
+              const found = await db.select()
+                .from(dimensionamento)
+                .where(eq(dimensionamento.login, a.login))
+                .limit(1);
+              if (found.length > 0) {
+                // Existe no banco com login igual mas nome diferente — atualiza o nome
+                await db.update(dimensionamento)
+                  .set({ nome: a.agente, status: "ATIVO" })
+                  .where(eq(dimensionamento.id, found[0].id));
+                autoAdded.push(a.agente);
+                continue;
+              }
+            }
+          }
+          // Não encontrado em nenhum lugar — insere como novo
+          try {
+            await insertDimensionamento({
+              nome: a.agente,
+              login: a.login || null,
+              celula: a.campanha || null,
+              uf: a.uf || null,
+              status: "ATIVO",
+            });
+            autoAdded.push(a.agente);
+          } catch {
+            stillMissing.push(a);
+          }
+        }
+        return {
+          autoAdded,
+          stillMissing,
+          totalAutoAdded: autoAdded.length,
+          totalStillMissing: stillMissing.length,
+        };
       }),
     // Cruzamento: quem está no AgentDay mas não no Dimensionamento
     crossCheck: publicProcedure

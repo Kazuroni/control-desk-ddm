@@ -36,6 +36,9 @@ export default function UploadPage() {
   const utils = trpc.useUtils();
   const { data: sessions, refetch: refetchSessions } = trpc.dashboard.getSessions.useQuery({});
   const processReport = trpc.dashboard.processReport.useMutation();
+  const syncAgentDay = trpc.dimensionamento.syncAgentDay.useMutation();
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "done">("idle");
+  const [syncResult, setSyncResult] = useState<{ totalAutoAdded: number; totalStillMissing: number } | null>(null);
 
   // Conta quantos tipos de relatório já foram importados na sessão atual
   const importedTypes = items.filter(i => i.status === "success").map(i => i.reportType);
@@ -71,6 +74,29 @@ export default function UploadPage() {
       utils.dashboard.getCampaignAgent.invalidate();
       utils.dashboard.getDispositionAgent.invalidate();
       utils.dashboard.getFilters.invalidate();
+      // Se for AgentDay, aciona sync automático com o Dimensionamento
+      if (result.reportType === "AgentDay") {
+        setSyncStatus("syncing");
+        setSyncResult(null);
+        try {
+          const syncRes = await syncAgentDay.mutateAsync({ sessionIds: [result.sessionId] });
+          setSyncResult(syncRes);
+          setSyncStatus("done");
+          // Invalida dimensionamento e agentday após sync
+          utils.dimensionamento.list.invalidate();
+          utils.dimensionamento.stats.invalidate();
+          utils.dimensionamento.crossCheck.invalidate();
+          utils.dashboard.getAgentDay.invalidate();
+          if (syncRes.totalAutoAdded > 0) {
+            toast.success(`✅ Sincronização concluída: ${syncRes.totalAutoAdded} agente(s) adicionado(s) ao Dimensionamento automaticamente`, { duration: 6000 });
+          } else {
+            toast.info("✓ Dimensionamento já está sincronizado — nenhum agente novo encontrado", { duration: 4000 });
+          }
+        } catch {
+          setSyncStatus("idle");
+          toast.warning("AgentDay importado, mas a sincronização automática falhou. Use 'Não Cadastrados' no Dimensionamento.");
+        }
+      }
     } catch (err: any) {
       const msg = err?.message || "Erro ao processar arquivo";
       setItems(prev => prev.map((item, i) => i === index ? { ...item, status: "error", message: msg } : item));
@@ -192,6 +218,38 @@ export default function UploadPage() {
               </div>
             ))}
           </div>
+
+          {/* Indicador visual de sincronização com Dimensionamento */}
+          {syncStatus === "syncing" && (
+            <div className="flex items-center gap-3 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl animate-pulse">
+              <Loader2 className="w-5 h-5 text-blue-400 animate-spin shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-blue-300">Sincronizando Dimensionamento...</p>
+                <p className="text-xs text-blue-400/70 mt-0.5">Verificando agentes não cadastrados e fazendo de-para automático.</p>
+              </div>
+            </div>
+          )}
+          {syncStatus === "done" && syncResult && (
+            <div className={`flex items-center gap-3 p-4 rounded-xl border transition-all ${
+              syncResult.totalAutoAdded > 0
+                ? "bg-emerald-500/10 border-emerald-500/20"
+                : "bg-slate-500/10 border-slate-500/20"
+            }`}>
+              <CheckCircle2 className={`w-5 h-5 shrink-0 ${syncResult.totalAutoAdded > 0 ? "text-emerald-400" : "text-slate-400"}`} />
+              <div className="flex-1">
+                <p className={`text-sm font-semibold ${syncResult.totalAutoAdded > 0 ? "text-emerald-300" : "text-slate-300"}`}>
+                  {syncResult.totalAutoAdded > 0
+                    ? `✅ ${syncResult.totalAutoAdded} agente(s) sincronizado(s) com o Dimensionamento`
+                    : "✓ Dimensionamento já está atualizado"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {syncResult.totalStillMissing > 0
+                    ? `${syncResult.totalStillMissing} agente(s) ainda pendente(s) — acesse Dimensionamento > Não Cadastrados`
+                    : "Performance em Tempo Real atualizada com turno, célula e supervisor."}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* CTA para ir ao dashboard após todos importados */}
           {allImported && (
