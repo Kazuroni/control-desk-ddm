@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure, router } from "../_core/trpc";
+import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import {
   canaisRotasCampanhas,
@@ -11,13 +11,16 @@ import { eq, desc, asc } from "drizzle-orm";
 
 export const canaisRotasRouter = router({
   // ─── Campanhas ─────────────────────────────────────────────────────────────
-  getCampanhas: publicProcedure.query(async () => {
+  getCampanhas: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(canaisRotasCampanhas).orderBy(asc(canaisRotasCampanhas.campanha));
+    return db
+      .select()
+      .from(canaisRotasCampanhas)
+      .orderBy(asc(canaisRotasCampanhas.campanha));
   }),
 
-  upsertCampanha: publicProcedure
+  upsertCampanha: protectedProcedure
     .input(
       z.object({
         id: z.number().optional(),
@@ -61,16 +64,18 @@ export const canaisRotasRouter = router({
       }
     }),
 
-  deleteCampanha: publicProcedure
+  deleteCampanha: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database unavailable");
-      await db.delete(canaisRotasCampanhas).where(eq(canaisRotasCampanhas.id, input.id));
+      await db
+        .delete(canaisRotasCampanhas)
+        .where(eq(canaisRotasCampanhas.id, input.id));
       return { success: true };
     }),
 
-  bulkInsertCampanhas: publicProcedure
+  bulkInsertCampanhas: protectedProcedure
     .input(
       z.array(
         z.object({
@@ -93,13 +98,16 @@ export const canaisRotasRouter = router({
     }),
 
   // ─── Rotas ─────────────────────────────────────────────────────────────────
-  getRotas: publicProcedure.query(async () => {
+  getRotas: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(canaisRotasRotas).orderBy(asc(canaisRotasRotas.nome));
+    return db
+      .select()
+      .from(canaisRotasRotas)
+      .orderBy(asc(canaisRotasRotas.nome));
   }),
 
-  upsertRota: publicProcedure
+  upsertRota: protectedProcedure
     .input(
       z.object({
         id: z.number().optional(),
@@ -140,23 +148,28 @@ export const canaisRotasRouter = router({
       }
     }),
 
-  deleteRota: publicProcedure
+  deleteRota: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database unavailable");
-      await db.delete(canaisRotasRotas).where(eq(canaisRotasRotas.id, input.id));
+      await db
+        .delete(canaisRotasRotas)
+        .where(eq(canaisRotasRotas.id, input.id));
       return { success: true };
     }),
 
   // ─── Diário de Bordo ───────────────────────────────────────────────────────
-  getDiario: publicProcedure.query(async () => {
+  getDiario: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(canaisRotasDiario).orderBy(desc(canaisRotasDiario.data));
+    return db
+      .select()
+      .from(canaisRotasDiario)
+      .orderBy(desc(canaisRotasDiario.data));
   }),
 
-  addDiario: publicProcedure
+  addDiario: protectedProcedure
     .input(
       z.object({
         data: z.string(),
@@ -175,23 +188,25 @@ export const canaisRotasRouter = router({
       return { success: true, id: (result as any).insertId };
     }),
 
-  deleteDiario: publicProcedure
+  deleteDiario: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database unavailable");
-      await db.delete(canaisRotasDiario).where(eq(canaisRotasDiario.id, input.id));
+      await db
+        .delete(canaisRotasDiario)
+        .where(eq(canaisRotasDiario.id, input.id));
       return { success: true };
     }),
 
   // ─── Canais IA ─────────────────────────────────────────────────────────────
-  getCanaisIA: publicProcedure.query(async () => {
+  getCanaisIA: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
     return db.select().from(canaisRotasIA).orderBy(asc(canaisRotasIA.celula));
   }),
 
-  upsertCanaisIA: publicProcedure
+  upsertCanaisIA: protectedProcedure
     .input(
       z.object({
         id: z.number().optional(),
@@ -229,7 +244,7 @@ export const canaisRotasRouter = router({
       }
     }),
 
-  deleteCanaisIA: publicProcedure
+  deleteCanaisIA: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -239,18 +254,29 @@ export const canaisRotasRouter = router({
     }),
 
   // ─── Resumo geral ──────────────────────────────────────────────────────────
-  getSummary: publicProcedure.query(async () => {
+  getSummary: protectedProcedure.query(async () => {
     const db = await getDb();
-    if (!db) return {
-      totalCampanhas: 0, campanhasAtivas: 0, totalSolicitado: 0,
-      totalAlocado: 0, saldoTotal: 0, totalCanaisRotas: 0,
-      totalRotas: 0, ultimasMovimentacoes: [], totalCelulasIA: 0,
-    };
+    if (!db)
+      return {
+        totalCampanhas: 0,
+        campanhasAtivas: 0,
+        totalSolicitado: 0,
+        totalAlocado: 0,
+        saldoTotal: 0,
+        totalCanaisRotas: 0,
+        totalRotas: 0,
+        ultimasMovimentacoes: [],
+        totalCelulasIA: 0,
+      };
 
     const [campanhas, rotas, diario, ia] = await Promise.all([
       db.select().from(canaisRotasCampanhas),
       db.select().from(canaisRotasRotas),
-      db.select().from(canaisRotasDiario).orderBy(desc(canaisRotasDiario.data)).limit(5),
+      db
+        .select()
+        .from(canaisRotasDiario)
+        .orderBy(desc(canaisRotasDiario.data))
+        .limit(5),
       db.select().from(canaisRotasIA),
     ]);
 

@@ -1,7 +1,28 @@
-import { eq, desc, asc, and, or, like, inArray, isNotNull, ne } from "drizzle-orm";
+import {
+  eq,
+  desc,
+  asc,
+  and,
+  or,
+  like,
+  inArray,
+  isNotNull,
+  ne,
+} from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, InsertDimensionamento, users, uploadSessions, agentDayRecords, reasonAgentRecords, campaignAgentRecords, dispositionAgentRecords, dimensionamento } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import {
+  InsertUser,
+  InsertDimensionamento,
+  users,
+  uploadSessions,
+  agentDayRecords,
+  reasonAgentRecords,
+  campaignAgentRecords,
+  dispositionAgentRecords,
+  dimensionamento,
+  pauseLimits,
+} from "../drizzle/schema";
+import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -20,7 +41,10 @@ export async function getDb() {
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb();
-  if (!db) { console.warn("[Database] Cannot upsert user: database not available"); return; }
+  if (!db) {
+    console.warn("[Database] Cannot upsert user: database not available");
+    return;
+  }
   try {
     const values: InsertUser = { openId: user.openId };
     const updateSet: Record<string, unknown> = {};
@@ -34,19 +58,38 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet[field] = normalized;
     };
     textFields.forEach(assignNullable);
-    if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
-    if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; }
-    else if (user.openId === ENV.ownerOpenId) { values.role = 'admin'; updateSet.role = 'admin'; }
+    if (user.lastSignedIn !== undefined) {
+      values.lastSignedIn = user.lastSignedIn;
+      updateSet.lastSignedIn = user.lastSignedIn;
+    }
+    if (user.role !== undefined) {
+      values.role = user.role;
+      updateSet.role = user.role;
+    } else if (user.openId === ENV.ownerOpenId) {
+      values.role = "admin";
+      updateSet.role = "admin";
+    }
     if (!values.lastSignedIn) values.lastSignedIn = new Date();
-    if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
-    await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
-  } catch (error) { console.error("[Database] Failed to upsert user:", error); throw error; }
+    if (Object.keys(updateSet).length === 0)
+      updateSet.lastSignedIn = new Date();
+    await db
+      .insert(users)
+      .values(values)
+      .onDuplicateKeyUpdate({ set: updateSet });
+  } catch (error) {
+    console.error("[Database] Failed to upsert user:", error);
+    throw error;
+  }
 }
 
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.openId, openId))
+    .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
@@ -94,16 +137,24 @@ export async function createUploadSession(data: {
     const oldIds = oldSessions.map(s => s.id);
     switch (data.reportType) {
       case "AgentDay":
-        await db.delete(agentDayRecords).where(inArray(agentDayRecords.sessionId, oldIds));
+        await db
+          .delete(agentDayRecords)
+          .where(inArray(agentDayRecords.sessionId, oldIds));
         break;
       case "ReasonAgent":
-        await db.delete(reasonAgentRecords).where(inArray(reasonAgentRecords.sessionId, oldIds));
+        await db
+          .delete(reasonAgentRecords)
+          .where(inArray(reasonAgentRecords.sessionId, oldIds));
         break;
       case "CampaignAgent":
-        await db.delete(campaignAgentRecords).where(inArray(campaignAgentRecords.sessionId, oldIds));
+        await db
+          .delete(campaignAgentRecords)
+          .where(inArray(campaignAgentRecords.sessionId, oldIds));
         break;
       case "DispositionAgent":
-        await db.delete(dispositionAgentRecords).where(inArray(dispositionAgentRecords.sessionId, oldIds));
+        await db
+          .delete(dispositionAgentRecords)
+          .where(inArray(dispositionAgentRecords.sessionId, oldIds));
         break;
     }
     await db.delete(uploadSessions).where(inArray(uploadSessions.id, oldIds));
@@ -117,21 +168,29 @@ export async function getUploadSessions(reportType?: string) {
   const db = await getDb();
   if (!db) return [];
   if (reportType) {
-    return await db.select().from(uploadSessions)
+    return await db
+      .select()
+      .from(uploadSessions)
       .where(eq(uploadSessions.reportType, reportType as any))
       .orderBy(desc(uploadSessions.createdAt));
   }
-  return await db.select().from(uploadSessions).orderBy(desc(uploadSessions.createdAt));
+  return await db
+    .select()
+    .from(uploadSessions)
+    .orderBy(desc(uploadSessions.createdAt));
 }
 
 /**
  * Retorna o ID da sessão mais recente de um dado tipo.
  * Usado como fallback quando nenhuma sessão está selecionada.
  */
-export async function getLatestSessionId(reportType: "AgentDay" | "ReasonAgent" | "CampaignAgent" | "DispositionAgent"): Promise<number | null> {
+export async function getLatestSessionId(
+  reportType: "AgentDay" | "ReasonAgent" | "CampaignAgent" | "DispositionAgent"
+): Promise<number | null> {
   const db = await getDb();
   if (!db) return null;
-  const result = await db.select({ id: uploadSessions.id })
+  const result = await db
+    .select({ id: uploadSessions.id })
     .from(uploadSessions)
     .where(eq(uploadSessions.reportType, reportType))
     .orderBy(desc(uploadSessions.createdAt))
@@ -145,9 +204,12 @@ export async function insertAgentDayRecords(sessionId: number, rows: any[]) {
   if (!db) throw new Error("Database not available");
   if (rows.length === 0) return;
   const chunks = [];
-  for (let i = 0; i < rows.length; i += 100) chunks.push(rows.slice(i, i + 100));
+  for (let i = 0; i < rows.length; i += 100)
+    chunks.push(rows.slice(i, i + 100));
   for (const chunk of chunks) {
-    await db.insert(agentDayRecords).values(chunk.map((r: any) => ({ ...r, sessionId })));
+    await db
+      .insert(agentDayRecords)
+      .values(chunk.map((r: any) => ({ ...r, sessionId })));
   }
 }
 
@@ -167,13 +229,21 @@ export async function getAgentDayRecords(filters: {
   }
 
   const conditions = [];
-  if (sessionIds?.length) conditions.push(inArray(agentDayRecords.sessionId, sessionIds));
-  if (filters.agente) conditions.push(like(agentDayRecords.agente, `%${filters.agente}%`));
+  if (sessionIds?.length)
+    conditions.push(inArray(agentDayRecords.sessionId, sessionIds));
+  if (filters.agente)
+    conditions.push(like(agentDayRecords.agente, `%${filters.agente}%`));
   if (filters.uf) conditions.push(eq(agentDayRecords.uf, filters.uf));
   // Exclui BOTs: agentes sem login são discadores automáticos, não devem aparecer no dashboard
-  conditions.push(and(isNotNull(agentDayRecords.login), ne(agentDayRecords.login, "")));
+  conditions.push(
+    and(isNotNull(agentDayRecords.login), ne(agentDayRecords.login, ""))
+  );
 
-  return await db.select().from(agentDayRecords).where(and(...conditions)).orderBy(desc(agentDayRecords.chamadasAtendidas));
+  return await db
+    .select()
+    .from(agentDayRecords)
+    .where(and(...conditions))
+    .orderBy(desc(agentDayRecords.chamadasAtendidas));
 }
 
 // ─── ReasonAgent Records ───────────────────────────────────────────────────────
@@ -182,13 +252,19 @@ export async function insertReasonAgentRecords(sessionId: number, rows: any[]) {
   if (!db) throw new Error("Database not available");
   if (rows.length === 0) return;
   const chunks = [];
-  for (let i = 0; i < rows.length; i += 100) chunks.push(rows.slice(i, i + 100));
+  for (let i = 0; i < rows.length; i += 100)
+    chunks.push(rows.slice(i, i + 100));
   for (const chunk of chunks) {
-    await db.insert(reasonAgentRecords).values(chunk.map((r: any) => ({ ...r, sessionId })));
+    await db
+      .insert(reasonAgentRecords)
+      .values(chunk.map((r: any) => ({ ...r, sessionId })));
   }
 }
 
-export async function getReasonAgentRecords(filters: { sessionIds?: number[]; agente?: string }) {
+export async function getReasonAgentRecords(filters: {
+  sessionIds?: number[];
+  agente?: string;
+}) {
   const db = await getDb();
   if (!db) return [];
 
@@ -199,22 +275,34 @@ export async function getReasonAgentRecords(filters: { sessionIds?: number[]; ag
   }
 
   const conditions = [];
-  if (sessionIds?.length) conditions.push(inArray(reasonAgentRecords.sessionId, sessionIds));
-  if (filters.agente) conditions.push(like(reasonAgentRecords.agente, `%${filters.agente}%`));
+  if (sessionIds?.length)
+    conditions.push(inArray(reasonAgentRecords.sessionId, sessionIds));
+  if (filters.agente)
+    conditions.push(like(reasonAgentRecords.agente, `%${filters.agente}%`));
 
-  if (conditions.length > 0) return await db.select().from(reasonAgentRecords).where(and(...conditions));
+  if (conditions.length > 0)
+    return await db
+      .select()
+      .from(reasonAgentRecords)
+      .where(and(...conditions));
   return await db.select().from(reasonAgentRecords);
 }
 
 // ─── CampaignAgent Records ─────────────────────────────────────────────────────
-export async function insertCampaignAgentRecords(sessionId: number, rows: any[]) {
+export async function insertCampaignAgentRecords(
+  sessionId: number,
+  rows: any[]
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   if (rows.length === 0) return;
   const chunks = [];
-  for (let i = 0; i < rows.length; i += 100) chunks.push(rows.slice(i, i + 100));
+  for (let i = 0; i < rows.length; i += 100)
+    chunks.push(rows.slice(i, i + 100));
   for (const chunk of chunks) {
-    await db.insert(campaignAgentRecords).values(chunk.map((r: any) => ({ ...r, sessionId })));
+    await db
+      .insert(campaignAgentRecords)
+      .values(chunk.map((r: any) => ({ ...r, sessionId })));
   }
 }
 
@@ -233,23 +321,40 @@ export async function getCampaignAgentRecords(filters: {
   }
 
   const conditions = [];
-  if (sessionIds?.length) conditions.push(inArray(campaignAgentRecords.sessionId, sessionIds));
-  if (filters.campanha) conditions.push(like(campaignAgentRecords.campanha, `%${filters.campanha}%`));
-  if (filters.supervisor) conditions.push(like(campaignAgentRecords.nomeSupervisor, `%${filters.supervisor}%`));
+  if (sessionIds?.length)
+    conditions.push(inArray(campaignAgentRecords.sessionId, sessionIds));
+  if (filters.campanha)
+    conditions.push(
+      like(campaignAgentRecords.campanha, `%${filters.campanha}%`)
+    );
+  if (filters.supervisor)
+    conditions.push(
+      like(campaignAgentRecords.nomeSupervisor, `%${filters.supervisor}%`)
+    );
 
-  if (conditions.length > 0) return await db.select().from(campaignAgentRecords).where(and(...conditions));
+  if (conditions.length > 0)
+    return await db
+      .select()
+      .from(campaignAgentRecords)
+      .where(and(...conditions));
   return await db.select().from(campaignAgentRecords);
 }
 
 // ─── DispositionAgent Records ──────────────────────────────────────────────────
-export async function insertDispositionAgentRecords(sessionId: number, rows: any[]) {
+export async function insertDispositionAgentRecords(
+  sessionId: number,
+  rows: any[]
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   if (rows.length === 0) return;
   const chunks = [];
-  for (let i = 0; i < rows.length; i += 100) chunks.push(rows.slice(i, i + 100));
+  for (let i = 0; i < rows.length; i += 100)
+    chunks.push(rows.slice(i, i + 100));
   for (const chunk of chunks) {
-    await db.insert(dispositionAgentRecords).values(chunk.map((r: any) => ({ ...r, sessionId })));
+    await db
+      .insert(dispositionAgentRecords)
+      .values(chunk.map((r: any) => ({ ...r, sessionId })));
   }
 }
 
@@ -267,10 +372,18 @@ export async function getDispositionAgentRecords(filters: {
   }
 
   const conditions = [];
-  if (sessionIds?.length) conditions.push(inArray(dispositionAgentRecords.sessionId, sessionIds));
-  if (filters.supervisor) conditions.push(like(dispositionAgentRecords.nomeSupervisor, `%${filters.supervisor}%`));
+  if (sessionIds?.length)
+    conditions.push(inArray(dispositionAgentRecords.sessionId, sessionIds));
+  if (filters.supervisor)
+    conditions.push(
+      like(dispositionAgentRecords.nomeSupervisor, `%${filters.supervisor}%`)
+    );
 
-  if (conditions.length > 0) return await db.select().from(dispositionAgentRecords).where(and(...conditions));
+  if (conditions.length > 0)
+    return await db
+      .select()
+      .from(dispositionAgentRecords)
+      .where(and(...conditions));
   return await db.select().from(dispositionAgentRecords);
 }
 
@@ -287,11 +400,14 @@ export async function getDimensionamento(filters: {
   const db = await getDb();
   if (!db) return [];
   const conditions: any[] = [];
-  if (filters.celula) conditions.push(eq(dimensionamento.celula, filters.celula));
-  if (filters.supervisor) conditions.push(eq(dimensionamento.supervisor, filters.supervisor));
+  if (filters.celula)
+    conditions.push(eq(dimensionamento.celula, filters.celula));
+  if (filters.supervisor)
+    conditions.push(eq(dimensionamento.supervisor, filters.supervisor));
   if (filters.turno) conditions.push(eq(dimensionamento.turno, filters.turno));
   if (filters.uf) conditions.push(eq(dimensionamento.uf, filters.uf));
-  if (filters.status) conditions.push(eq(dimensionamento.status, filters.status));
+  if (filters.status)
+    conditions.push(eq(dimensionamento.status, filters.status));
   if (filters.search) {
     conditions.push(
       or(
@@ -301,9 +417,16 @@ export async function getDimensionamento(filters: {
     );
   }
   if (conditions.length > 0) {
-    return await db.select().from(dimensionamento).where(and(...conditions)).orderBy(asc(dimensionamento.nome));
+    return await db
+      .select()
+      .from(dimensionamento)
+      .where(and(...conditions))
+      .orderBy(asc(dimensionamento.nome));
   }
-  return await db.select().from(dimensionamento).orderBy(asc(dimensionamento.nome));
+  return await db
+    .select()
+    .from(dimensionamento)
+    .orderBy(asc(dimensionamento.nome));
 }
 
 export async function insertDimensionamento(data: InsertDimensionamento) {
@@ -313,7 +436,10 @@ export async function insertDimensionamento(data: InsertDimensionamento) {
   return result;
 }
 
-export async function updateDimensionamento(id: number, data: Partial<InsertDimensionamento>) {
+export async function updateDimensionamento(
+  id: number,
+  data: Partial<InsertDimensionamento>
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(dimensionamento).set(data).where(eq(dimensionamento.id, id));
@@ -328,18 +454,90 @@ export async function deleteDimensionamento(id: number) {
 export async function getDimensionamentoById(id: number) {
   const db = await getDb();
   if (!db) return null;
-  const result = await db.select().from(dimensionamento).where(eq(dimensionamento.id, id)).limit(1);
+  const result = await db
+    .select()
+    .from(dimensionamento)
+    .where(eq(dimensionamento.id, id))
+    .limit(1);
   return result.length > 0 ? result[0] : null;
 }
 
 export async function getDimensionamentoStats() {
   const db = await getDb();
-  if (!db) return { total: 0, ativos: 0, celulas: [], supervisores: [], turnos: [], ufs: [] };
+  if (!db)
+    return {
+      total: 0,
+      ativos: 0,
+      celulas: [],
+      supervisores: [],
+      turnos: [],
+      ufs: [],
+    };
   const all = await db.select().from(dimensionamento);
   const ativos = all.filter(r => r.status?.toUpperCase() === "ATIVO");
-  const celulas = Array.from(new Set(all.map(r => r.celula).filter(Boolean))).sort() as string[];
-  const supervisores = Array.from(new Set(all.map(r => r.supervisor).filter(Boolean))).sort() as string[];
-  const turnos = Array.from(new Set(all.map(r => r.turno).filter(Boolean))).sort() as string[];
-  const ufs = Array.from(new Set(all.map(r => r.uf).filter(Boolean))).sort() as string[];
-  return { total: all.length, ativos: ativos.length, celulas, supervisores, turnos, ufs };
+  const celulas = Array.from(
+    new Set(all.map(r => r.celula).filter(Boolean))
+  ).sort() as string[];
+  const supervisores = Array.from(
+    new Set(all.map(r => r.supervisor).filter(Boolean))
+  ).sort() as string[];
+  const turnos = Array.from(
+    new Set(all.map(r => r.turno).filter(Boolean))
+  ).sort() as string[];
+  const ufs = Array.from(
+    new Set(all.map(r => r.uf).filter(Boolean))
+  ).sort() as string[];
+  return {
+    total: all.length,
+    ativos: ativos.length,
+    celulas,
+    supervisores,
+    turnos,
+    ufs,
+  };
+}
+
+// ─── Limites de Pausa (NR17 configurável) ──────────────────────────────────────
+// Overrides gravados pelo usuário. Motivos sem linha aqui usam o valor
+// padrão (DEFAULT_PAUSE_LIMITS em server/routers.ts) — nunca ficam sem limite.
+
+export async function getPauseLimits(): Promise<
+  { motivo: string; limiteSegundos: number }[]
+> {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      motivo: pauseLimits.motivo,
+      limiteSegundos: pauseLimits.limiteSegundos,
+    })
+    .from(pauseLimits)
+    .orderBy(asc(pauseLimits.motivo));
+}
+
+export async function upsertPauseLimit(motivo: string, limiteSegundos: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const key = motivo.trim().toLowerCase();
+  const existing = await db
+    .select({ id: pauseLimits.id })
+    .from(pauseLimits)
+    .where(eq(pauseLimits.motivo, key))
+    .limit(1);
+  if (existing.length > 0) {
+    await db
+      .update(pauseLimits)
+      .set({ limiteSegundos })
+      .where(eq(pauseLimits.id, existing[0].id));
+  } else {
+    await db.insert(pauseLimits).values({ motivo: key, limiteSegundos });
+  }
+}
+
+export async function deletePauseLimit(motivo: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .delete(pauseLimits)
+    .where(eq(pauseLimits.motivo, motivo.trim().toLowerCase()));
 }

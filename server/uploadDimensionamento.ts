@@ -35,8 +35,12 @@ import * as XLSX from "xlsx";
 import { getDb } from "./db";
 import { dimensionamento } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { sdk } from "./_core/sdk";
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+});
 
 /**
  * Converte valor de célula Excel de TEMPO para "HH:MM".
@@ -98,7 +102,8 @@ function fmtDate(val: any): string {
     if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
     // Formato DD/MM/YYYY
     const dmyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-    if (dmyMatch) return `${dmyMatch[3]}-${dmyMatch[2].padStart(2, "0")}-${dmyMatch[1].padStart(2, "0")}`;
+    if (dmyMatch)
+      return `${dmyMatch[3]}-${dmyMatch[2].padStart(2, "0")}-${dmyMatch[1].padStart(2, "0")}`;
     return trimmed;
   }
 
@@ -117,145 +122,345 @@ function safeInt(val: any): number | undefined {
   return isNaN(n) ? undefined : n;
 }
 
+// ─── Mapeamento de colunas por cabeçalho ────────────────────────────────────
+// Antes (BUG 2 do histórico): colunas eram mapeadas por posição fixa (col[4],
+// col[5]...). Qualquer alteração no layout do Excel do cliente (coluna
+// adicionada/removida/reordenada) reintroduzia o mesmo bug, silenciosamente.
+// Agora: localizamos cada campo pelo texto do cabeçalho. Só caímos para
+// posição fixa se a planilha genuinamente não tiver linha de cabeçalho — e
+// nesse caso avisamos o usuário na resposta.
+type FieldKey =
+  | "nome"
+  | "login"
+  | "loginOlos"
+  | "email"
+  | "supervisor"
+  | "admissao"
+  | "nascimento"
+  | "cpf"
+  | "funcao"
+  | "cargo"
+  | "departamento"
+  | "uf"
+  | "status"
+  | "discador"
+  | "celula"
+  | "skill"
+  | "turno"
+  | "escalaHora"
+  | "escala"
+  | "entrada"
+  | "saida"
+  | "entradaS"
+  | "saidaS";
+
+const LEGACY_POSITIONS: Record<FieldKey, number> = {
+  nome: 0,
+  login: 1,
+  loginOlos: 2,
+  email: 3,
+  supervisor: 4,
+  admissao: 5,
+  nascimento: 6,
+  cpf: 7,
+  funcao: 8,
+  cargo: 9,
+  departamento: 10,
+  uf: 11,
+  status: 12,
+  discador: 13,
+  celula: 14,
+  skill: 15,
+  turno: 16,
+  escalaHora: 17,
+  escala: 18,
+  entrada: 19,
+  saida: 20,
+  entradaS: 21,
+  saidaS: 22,
+};
+
+function normalizeHeader(s: any): string {
+  return String(s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // remove acentos
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
+}
+
+// Localiza o índice de cada campo pelo texto do cabeçalho.
+// Retorna -1 para campos não encontrados (tratado pelo chamador).
+function findColumnIndexes(headerRow: any[]): Record<FieldKey, number> {
+  const h = headerRow.map(normalizeHeader);
+  const exact = (name: string) => h.findIndex(x => x === name);
+  const includes = (name: string) => h.findIndex(x => x.includes(name));
+
+  return {
+    nome: exact("NOME") >= 0 ? exact("NOME") : includes("NOME"),
+    login: h.findIndex(
+      x => x === "LOGIN" || (x.includes("LOGIN") && !x.includes("OLOS"))
+    ),
+    loginOlos: h.findIndex(x => x.includes("LOGIN") && x.includes("OLOS")),
+    email: includes("EMAIL"),
+    supervisor: includes("SUPERVISOR"),
+    admissao: includes("ADMISSAO"),
+    nascimento: includes("NASCIMENTO"),
+    cpf: exact("CPF"),
+    funcao: exact("FUNCAO") >= 0 ? exact("FUNCAO") : includes("FUNCAO"),
+    cargo: exact("CARGO"),
+    departamento: includes("DEPARTAMENTO"),
+    uf: exact("UF"),
+    status: exact("STATUS") >= 0 ? exact("STATUS") : includes("STATUS"),
+    discador: includes("DISCADOR"),
+    celula: includes("CELULA"),
+    skill: exact("SKILL") >= 0 ? exact("SKILL") : includes("SKILL"),
+    turno: exact("TURNO") >= 0 ? exact("TURNO") : includes("TURNO"),
+    escalaHora: h.findIndex(x => x.includes("ESCALA") && x.includes("HORA")),
+    escala: exact("ESCALA"),
+    entrada: exact("ENTRADA"),
+    saida: exact("SAIDA"),
+    entradaS: h.findIndex(x => x !== "ENTRADA" && x.startsWith("ENTRADA")),
+    saidaS: h.findIndex(x => x !== "SAIDA" && x.startsWith("SAIDA")),
+  };
+}
+
+const REQUIRED_FIELDS: FieldKey[] = ["nome"];
+const FIELD_LABELS: Record<FieldKey, string> = {
+  nome: "Nome",
+  login: "Login",
+  loginOlos: "Login OLOS",
+  email: "Email",
+  supervisor: "Supervisor",
+  admissao: "Admissão",
+  nascimento: "Nascimento",
+  cpf: "CPF",
+  funcao: "Função",
+  cargo: "Cargo",
+  departamento: "Departamento",
+  uf: "UF",
+  status: "Status",
+  discador: "Discador",
+  celula: "Célula",
+  skill: "Skill",
+  turno: "Turno",
+  escalaHora: "EscalaHora",
+  escala: "Escala",
+  entrada: "Entrada",
+  saida: "Saída",
+  entradaS: "Entrada.S",
+  saidaS: "Saída.S",
+};
+
 export function registerUploadDimensionamento(app: Express) {
-  app.post("/api/upload-dimensionamento", upload.single("file"), async (req, res) => {
-    try {
-      if (!req.file) {
-        res.status(400).json({ error: "Nenhum arquivo enviado." });
-        return;
-      }
-
-      const ext = req.file.originalname.toLowerCase();
-      if (!ext.endsWith(".xlsx") && !ext.endsWith(".xls")) {
-        res.status(400).json({ error: "Apenas arquivos .xlsx ou .xls são aceitos." });
-        return;
-      }
-
-      // CORREÇÃO BUG 1: cellDates: false — não converter datas/tempos automaticamente.
-      // Recebemos os seriais numéricos brutos e tratamos manualmente com fmtDate() e
-      // excelTimeToHHMM(), evitando o problema do "Dec 30 1899".
-      const wb = XLSX.read(req.file.buffer, { type: "buffer", cellDates: false });
-
-      // Prioridade de aba: BaseQuadro > DIM > BaseQuadroOutros > QuadroGeral > qualquer com "base"/"dim" > primeira aba
-      // QuadroMS é EXCLUÍDA pois tem estrutura diferente (sem supervisor, admissão, nascimento, CPF)
-      const PRIORITY_SHEETS = ["BaseQuadro", "DIM", "BaseQuadroOutros", "QuadroGeral"];
-      const sheetName =
-        PRIORITY_SHEETS.find(p => wb.SheetNames.includes(p)) ||
-        wb.SheetNames.find(n =>
-          !n.toLowerCase().includes("ms") &&
-          (n.toLowerCase().includes("base") || n.toLowerCase().includes("dim"))
-        ) ||
-        wb.SheetNames[0];
-
-      const ws = wb.Sheets[sheetName];
-      const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-
-      if (rows.length < 2) {
-        res.status(400).json({ error: "Planilha vazia ou sem dados." });
-        return;
-      }
-
-      // Detecta se a primeira linha é cabeçalho (contém texto)
-      const firstRow = rows[0];
-      const hasHeader = firstRow.some(c => typeof c === "string" && /nome|login|supervisor|funcionário/i.test(String(c)));
-      const dataRows = hasHeader ? rows.slice(1) : rows;
-
-      const db = await getDb();
-      if (!db) {
-        res.status(500).json({ error: "Banco de dados indisponível." });
-        return;
-      }
-
-      let inserted = 0;
-      let updated = 0;
-      let skipped = 0;
-      const errors: string[] = [];
-
-      for (const row of dataRows) {
-        const nome = safeStr(row[0]);
-        if (!nome || nome.toUpperCase() === "NOME" || nome.toUpperCase() === "NOME DO FUNCIONÁRIO") {
-          skipped++;
-          continue;
+  app.post(
+    "/api/upload-dimensionamento",
+    upload.single("file"),
+    async (req, res) => {
+      try {
+        const user = await sdk.authenticateRequest(req).catch(() => null);
+        if (!user) {
+          res
+            .status(401)
+            .json({
+              error: "Faça login para importar dados de dimensionamento.",
+            });
+          return;
         }
 
-        const login = safeStr(row[1]);
-        const loginOlos = safeInt(row[2]);
-
-        // Mapeamento de colunas conforme cabeçalho real do arquivo:
-        // [0] Nome  [1] Login  [2] LoginOlos  [3] Email  [4] Supervisor
-        // [5] Admissão  [6] Nascimento  [7] CPF  [8] Função  [9] Cargo
-        // [10] Departamento  [11] UF  [12] Status  [13] Discador  [14] Célula
-        // [15] Skill  [16] Turno  [17] EscalaHora  [18] Escala
-        // [19] Entrada  [20] Saída  [21] Entrada.S  [22] Saída.S
-        const payload = {
-          nome,
-          login: login || null,
-          loginOlos: loginOlos ?? null,
-          email: safeStr(row[3]) || null,
-          supervisor: safeStr(row[4]) || null,
-          admissao: fmtDate(row[5]) || null,
-          nascimento: fmtDate(row[6]) || null,
-          cpf: safeStr(row[7]) || null,
-          funcao: safeStr(row[8]) || null,
-          cargo: safeStr(row[9]) || null,
-          departamento: safeStr(row[10]) || null,
-          uf: safeStr(row[11]) || null,
-          status: safeStr(row[12]) || "ATIVO",
-          discador: safeStr(row[13]) || null,
-          celula: safeStr(row[14]) || null,
-          skill: safeStr(row[15]) || null,
-          turno: safeStr(row[16]) || null,
-          escalaHora: excelTimeToHHMM(row[17]) || null,
-          escala: safeStr(row[18]) || null,
-          entrada: excelTimeToHHMM(row[19]) || null,
-          saida: excelTimeToHHMM(row[20]) || null,
-          entradaS: row.length > 21 ? excelTimeToHHMM(row[21]) || null : null,
-          saidaS: row.length > 22 ? excelTimeToHHMM(row[22]) || null : null,
-        };
-
-        try {
-          // Upsert: busca por login primeiro, depois por nome
-          let existing = null;
-          if (login) {
-            const found = await db.select({ id: dimensionamento.id })
-              .from(dimensionamento)
-              .where(eq(dimensionamento.login, login))
-              .limit(1);
-            existing = found[0] ?? null;
-          }
-          if (!existing) {
-            const found = await db.select({ id: dimensionamento.id })
-              .from(dimensionamento)
-              .where(eq(dimensionamento.nome, nome))
-              .limit(1);
-            existing = found[0] ?? null;
-          }
-
-          if (existing) {
-            await db.update(dimensionamento).set(payload).where(eq(dimensionamento.id, existing.id));
-            updated++;
-          } else {
-            await db.insert(dimensionamento).values(payload);
-            inserted++;
-          }
-        } catch (e: any) {
-          errors.push(`Linha "${nome}": ${e.message}`);
-          skipped++;
+        if (!req.file) {
+          res.status(400).json({ error: "Nenhum arquivo enviado." });
+          return;
         }
-      }
 
-      res.json({
-        success: true,
-        sheetName,
-        totalRows: dataRows.length,
-        inserted,
-        updated,
-        skipped,
-        errors: errors.slice(0, 20),
-      });
-    } catch (e: any) {
-      console.error("[upload-dimensionamento]", e);
-      res.status(500).json({ error: "Erro interno ao processar arquivo: " + e.message });
+        const ext = req.file.originalname.toLowerCase();
+        if (!ext.endsWith(".xlsx") && !ext.endsWith(".xls")) {
+          res
+            .status(400)
+            .json({ error: "Apenas arquivos .xlsx ou .xls são aceitos." });
+          return;
+        }
+
+        // CORREÇÃO BUG 1: cellDates: false — não converter datas/tempos automaticamente.
+        // Recebemos os seriais numéricos brutos e tratamos manualmente com fmtDate() e
+        // excelTimeToHHMM(), evitando o problema do "Dec 30 1899".
+        const wb = XLSX.read(req.file.buffer, {
+          type: "buffer",
+          cellDates: false,
+        });
+
+        // Prioridade de aba: BaseQuadro > DIM > BaseQuadroOutros > QuadroGeral > qualquer com "base"/"dim" > primeira aba
+        // QuadroMS é EXCLUÍDA pois tem estrutura diferente (sem supervisor, admissão, nascimento, CPF)
+        const PRIORITY_SHEETS = [
+          "BaseQuadro",
+          "DIM",
+          "BaseQuadroOutros",
+          "QuadroGeral",
+        ];
+        const sheetName =
+          PRIORITY_SHEETS.find(p => wb.SheetNames.includes(p)) ||
+          wb.SheetNames.find(
+            n =>
+              !n.toLowerCase().includes("ms") &&
+              (n.toLowerCase().includes("base") ||
+                n.toLowerCase().includes("dim"))
+          ) ||
+          wb.SheetNames[0];
+
+        const ws = wb.Sheets[sheetName];
+        const rows: any[][] = XLSX.utils.sheet_to_json(ws, {
+          header: 1,
+          defval: null,
+        });
+
+        if (rows.length < 2) {
+          res.status(400).json({ error: "Planilha vazia ou sem dados." });
+          return;
+        }
+
+        // Detecta se a primeira linha é cabeçalho (contém texto)
+        const firstRow = rows[0];
+        const hasHeader = firstRow.some(
+          c =>
+            typeof c === "string" &&
+            /nome|login|supervisor|funcionário/i.test(String(c))
+        );
+        const dataRows = hasHeader ? rows.slice(1) : rows;
+
+        // Mapeamento de colunas: por nome de cabeçalho (preferencial) ou
+        // posição fixa legada (só quando não há cabeçalho detectável).
+        const warnings: string[] = [];
+        let col: Record<FieldKey, number>;
+        if (hasHeader) {
+          col = findColumnIndexes(firstRow);
+          const missingRequired = REQUIRED_FIELDS.filter(f => col[f] < 0);
+          if (missingRequired.length > 0) {
+            res.status(400).json({
+              error: `Não foi possível localizar a(s) coluna(s) obrigatória(s) no cabeçalho: ${missingRequired.map(f => FIELD_LABELS[f]).join(", ")}. Verifique se o cabeçalho da planilha não foi renomeado.`,
+            });
+            return;
+          }
+          const missingOptional = (Object.keys(col) as FieldKey[]).filter(
+            f => col[f] < 0 && !REQUIRED_FIELDS.includes(f)
+          );
+          if (missingOptional.length > 0) {
+            warnings.push(
+              `Colunas não encontradas pelo cabeçalho (ficaram em branco): ${missingOptional.map(f => FIELD_LABELS[f]).join(", ")}.`
+            );
+          }
+        } else {
+          col = { ...LEGACY_POSITIONS };
+          warnings.push(
+            "Planilha sem linha de cabeçalho detectada — usando mapeamento posicional legado. Confira se os dados vieram nas colunas certas."
+          );
+        }
+
+        const db = await getDb();
+        if (!db) {
+          res.status(500).json({ error: "Banco de dados indisponível." });
+          return;
+        }
+
+        let inserted = 0;
+        let updated = 0;
+        let skipped = 0;
+        const errors: string[] = [];
+
+        const get = (row: any[], field: FieldKey) =>
+          col[field] >= 0 ? row[col[field]] : undefined;
+
+        for (const row of dataRows) {
+          const nome = safeStr(get(row, "nome"));
+          if (
+            !nome ||
+            nome.toUpperCase() === "NOME" ||
+            nome.toUpperCase() === "NOME DO FUNCIONÁRIO"
+          ) {
+            skipped++;
+            continue;
+          }
+
+          const login = safeStr(get(row, "login"));
+          const loginOlos = safeInt(get(row, "loginOlos"));
+
+          const payload = {
+            nome,
+            login: login || null,
+            loginOlos: loginOlos ?? null,
+            email: safeStr(get(row, "email")) || null,
+            supervisor: safeStr(get(row, "supervisor")) || null,
+            admissao: fmtDate(get(row, "admissao")) || null,
+            nascimento: fmtDate(get(row, "nascimento")) || null,
+            cpf: safeStr(get(row, "cpf")) || null,
+            funcao: safeStr(get(row, "funcao")) || null,
+            cargo: safeStr(get(row, "cargo")) || null,
+            departamento: safeStr(get(row, "departamento")) || null,
+            uf: safeStr(get(row, "uf")) || null,
+            status: safeStr(get(row, "status")) || "ATIVO",
+            discador: safeStr(get(row, "discador")) || null,
+            celula: safeStr(get(row, "celula")) || null,
+            skill: safeStr(get(row, "skill")) || null,
+            turno: safeStr(get(row, "turno")) || null,
+            escalaHora: excelTimeToHHMM(get(row, "escalaHora")) || null,
+            escala: safeStr(get(row, "escala")) || null,
+            entrada: excelTimeToHHMM(get(row, "entrada")) || null,
+            saida: excelTimeToHHMM(get(row, "saida")) || null,
+            entradaS: excelTimeToHHMM(get(row, "entradaS")) || null,
+            saidaS: excelTimeToHHMM(get(row, "saidaS")) || null,
+          };
+
+          try {
+            // Upsert: busca por login primeiro, depois por nome
+            let existing = null;
+            if (login) {
+              const found = await db
+                .select({ id: dimensionamento.id })
+                .from(dimensionamento)
+                .where(eq(dimensionamento.login, login))
+                .limit(1);
+              existing = found[0] ?? null;
+            }
+            if (!existing) {
+              const found = await db
+                .select({ id: dimensionamento.id })
+                .from(dimensionamento)
+                .where(eq(dimensionamento.nome, nome))
+                .limit(1);
+              existing = found[0] ?? null;
+            }
+
+            if (existing) {
+              await db
+                .update(dimensionamento)
+                .set(payload)
+                .where(eq(dimensionamento.id, existing.id));
+              updated++;
+            } else {
+              await db.insert(dimensionamento).values(payload);
+              inserted++;
+            }
+          } catch (e: any) {
+            errors.push(`Linha "${nome}": ${e.message}`);
+            skipped++;
+          }
+        }
+
+        res.json({
+          success: true,
+          sheetName,
+          totalRows: dataRows.length,
+          inserted,
+          updated,
+          skipped,
+          errors: errors.slice(0, 20),
+          warnings,
+        });
+      } catch (e: any) {
+        console.error("[upload-dimensionamento]", e);
+        res
+          .status(500)
+          .json({ error: "Erro interno ao processar arquivo: " + e.message });
+      }
     }
-  });
+  );
 }

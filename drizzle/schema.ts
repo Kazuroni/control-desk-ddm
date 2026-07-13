@@ -124,7 +124,22 @@ export const dispositionAgentRecords = mysqlTable("disposition_agent_records", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export type DispositionAgentRecord = typeof dispositionAgentRecords.$inferSelect;
+export type DispositionAgentRecord =
+  typeof dispositionAgentRecords.$inferSelect;
+
+// Limites de pausa configuráveis (substitui valores hardcoded no código).
+// Uma linha por motivo com override do limite padrão (em segundos).
+// Motivos sem linha aqui usam o valor padrão definido em server/routers.ts.
+export const pauseLimits = mysqlTable("pause_limits", {
+  id: int("id").autoincrement().primaryKey(),
+  motivo: varchar("motivo", { length: 255 }).notNull().unique(),
+  limiteSegundos: int("limiteSegundos").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PauseLimit = typeof pauseLimits.$inferSelect;
+export type InsertPauseLimit = typeof pauseLimits.$inferInsert;
 
 // Quadro de Dimensionamento — operadores cadastrados
 export const dimensionamento = mysqlTable("dimensionamento", {
@@ -176,7 +191,8 @@ export const canaisRotasCampanhas = mysqlTable("canais_rotas_campanhas", {
 });
 
 export type CanaisRotasCampanha = typeof canaisRotasCampanhas.$inferSelect;
-export type InsertCanaisRotasCampanha = typeof canaisRotasCampanhas.$inferInsert;
+export type InsertCanaisRotasCampanha =
+  typeof canaisRotasCampanhas.$inferInsert;
 
 // Rotas disponíveis com qualidade, custo e quantidade de canais
 export const canaisRotasRotas = mysqlTable("canais_rotas_rotas", {
